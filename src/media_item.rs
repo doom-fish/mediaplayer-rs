@@ -1,9 +1,86 @@
-//! Explicit macOS-unavailable wrapper for `MPMediaItem`.
-//!
-//! Apple marks this MediaPlayer API as unavailable on macOS. The wrapper exists so
-//! the crate documents the area explicitly and fails predictably at runtime.
+//! `MPMediaType` plus the explicit macOS-unavailable `MPMediaItem` marker.
+
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 use crate::{ffi, unsupported, MediaPlayerError};
+
+/// Type alias for `MPMediaEntityPersistentID`.
+pub type MediaEntityPersistentId = u64;
+
+/// Bitflag wrapper around `MPMediaType`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct MediaType(u64);
+
+impl MediaType {
+    pub const NONE: Self = Self(0);
+    pub const MUSIC: Self = Self(1 << 0);
+    pub const PODCAST: Self = Self(1 << 1);
+    pub const AUDIOBOOK: Self = Self(1 << 2);
+    pub const AUDIO_ITUNES_U: Self = Self(1 << 3);
+    pub const ANY_AUDIO: Self = Self(0x00ff);
+    pub const MOVIE: Self = Self(1 << 8);
+    pub const TV_SHOW: Self = Self(1 << 9);
+    pub const VIDEO_PODCAST: Self = Self(1 << 10);
+    pub const MUSIC_VIDEO: Self = Self(1 << 11);
+    pub const VIDEO_ITUNES_U: Self = Self(1 << 12);
+    pub const HOME_VIDEO: Self = Self(1 << 13);
+    pub const ANY_VIDEO: Self = Self(0xff00);
+    pub const ANY: Self = Self(u64::MAX);
+
+    #[must_use]
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
+    #[must_use]
+    pub const fn from_bits(bits: u64) -> Self {
+        Self(bits)
+    }
+
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    #[must_use]
+    pub const fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    #[must_use]
+    pub const fn intersects(self, other: Self) -> bool {
+        (self.0 & other.0) != 0
+    }
+}
+
+impl BitOr for MediaType {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl BitOrAssign for MediaType {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+impl BitAnd for MediaType {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+
+impl BitAndAssign for MediaType {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+}
 
 /// Marker type representing `MPMediaItem`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

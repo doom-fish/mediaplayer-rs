@@ -4,7 +4,7 @@ use core::ffi::c_void;
 use std::ffi::CString;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::artwork::Artwork;
+use crate::artwork::{AnimatedArtwork, Artwork};
 use crate::{ffi, unsupported, MediaPlayerError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -117,12 +117,17 @@ impl LanguageOption {
             .map(|value| CString::new(*value))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
-        let characteristic_ptrs = characteristics.iter().map(|value| value.as_ptr()).collect::<Vec<_>>();
+        let characteristic_ptrs = characteristics
+            .iter()
+            .map(|value| value.as_ptr())
+            .collect::<Vec<_>>();
 
         let ptr = unsafe {
             ffi::mp_language_option_new(
                 language_option_type as i32,
-                language_tag.as_ref().map_or(std::ptr::null(), |value| value.as_ptr()),
+                language_tag
+                    .as_ref()
+                    .map_or(std::ptr::null(), |value| value.as_ptr()),
                 if characteristic_ptrs.is_empty() {
                     std::ptr::null()
                 } else {
@@ -178,6 +183,16 @@ impl LanguageOption {
         unsafe { ffi::mp_language_option_is_automatic_audible(self.ptr) != 0 }
     }
 
+    /// Create a language option from an `AVMediaSelectionOption` raw pointer.
+    ///
+    /// # Safety
+    /// `option` must point to a live `AVMediaSelectionOption` object.
+    #[must_use]
+    pub unsafe fn from_av_media_selection_option_raw(option: *mut c_void) -> Option<Self> {
+        let ptr = ffi::mp_language_option_new_from_media_selection_option(option);
+        (!ptr.is_null()).then_some(Self { ptr })
+    }
+
     pub(crate) unsafe fn from_raw(ptr: *mut c_void) -> Self {
         Self { ptr }
     }
@@ -204,7 +219,10 @@ impl std::fmt::Debug for LanguageOptionGroup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LanguageOptionGroup")
             .field("count", &self.count())
-            .field("default_language_option_index", &self.default_language_option_index())
+            .field(
+                "default_language_option_index",
+                &self.default_language_option_index(),
+            )
             .field("allow_empty_selection", &self.allow_empty_selection())
             .finish()
     }
@@ -253,7 +271,10 @@ impl LanguageOptionGroup {
             .transpose()?
             .unwrap_or(-1);
 
-        let option_ptrs = language_options.iter().map(|option| option.ptr).collect::<Vec<_>>();
+        let option_ptrs = language_options
+            .iter()
+            .map(|option| option.ptr)
+            .collect::<Vec<_>>();
         let ptr = unsafe {
             ffi::mp_language_option_group_new(
                 option_ptrs.as_ptr(),
@@ -286,6 +307,16 @@ impl LanguageOptionGroup {
     #[must_use]
     pub fn allow_empty_selection(&self) -> bool {
         unsafe { ffi::mp_language_option_group_allows_empty_selection(self.ptr) != 0 }
+    }
+
+    /// Create a language option group from an `AVMediaSelectionGroup` raw pointer.
+    ///
+    /// # Safety
+    /// `group` must point to a live `AVMediaSelectionGroup` object.
+    #[must_use]
+    pub unsafe fn from_av_media_selection_group_raw(group: *mut c_void) -> Option<Self> {
+        let ptr = ffi::mp_language_option_group_new_from_media_selection_group(group);
+        (!ptr.is_null()).then_some(Self { ptr })
     }
 }
 
@@ -325,6 +356,8 @@ pub struct NowPlayingInfo {
     pub credits_start_time: Option<f64>,
     pub international_standard_recording_code: Option<String>,
     pub exclude_from_suggestions: Option<bool>,
+    pub animated_artwork_1x1: Option<AnimatedArtwork>,
+    pub animated_artwork_3x4: Option<AnimatedArtwork>,
 }
 
 impl NowPlayingInfo {
@@ -488,6 +521,18 @@ impl NowPlayingInfo {
         self.exclude_from_suggestions = Some(exclude);
         self
     }
+
+    #[must_use]
+    pub fn animated_artwork_1x1(mut self, artwork: AnimatedArtwork) -> Self {
+        self.animated_artwork_1x1 = Some(artwork);
+        self
+    }
+
+    #[must_use]
+    pub fn animated_artwork_3x4(mut self, artwork: AnimatedArtwork) -> Self {
+        self.animated_artwork_3x4 = Some(artwork);
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -507,7 +552,11 @@ impl NowPlayingInfoCenter {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn set_now_playing_info_with_artwork(&self, info: &NowPlayingInfo, artwork: Option<&Artwork>) {
+    pub fn set_now_playing_info_with_artwork(
+        &self,
+        info: &NowPlayingInfo,
+        artwork: Option<&Artwork>,
+    ) {
         let info_box = unsafe { ffi::mp_now_playing_info_box_new() };
         if info_box.is_null() {
             return;
@@ -518,68 +567,144 @@ impl NowPlayingInfoCenter {
         unsafe {
             if let Some(value) = info.title.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::Title as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::Title as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.artist.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::Artist as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::Artist as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.album_title.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::AlbumTitle as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::AlbumTitle as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.playback_duration {
-                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::PlaybackDuration as i32, value);
+                ffi::mp_now_playing_info_box_set_double(
+                    info_box,
+                    NowPlayingKey::PlaybackDuration as i32,
+                    value,
+                );
             }
             if let Some(value) = info.elapsed_playback_time {
-                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::ElapsedPlaybackTime as i32, value);
+                ffi::mp_now_playing_info_box_set_double(
+                    info_box,
+                    NowPlayingKey::ElapsedPlaybackTime as i32,
+                    value,
+                );
             }
             if let Some(value) = info.playback_rate {
-                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::PlaybackRate as i32, value);
+                ffi::mp_now_playing_info_box_set_double(
+                    info_box,
+                    NowPlayingKey::PlaybackRate as i32,
+                    value,
+                );
             }
             if let Some(value) = info.default_playback_rate {
-                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::DefaultPlaybackRate as i32, value);
+                ffi::mp_now_playing_info_box_set_double(
+                    info_box,
+                    NowPlayingKey::DefaultPlaybackRate as i32,
+                    value,
+                );
             }
             if let Some(value) = info.playback_queue_index {
-                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::PlaybackQueueIndex as i32, value);
+                ffi::mp_now_playing_info_box_set_u64(
+                    info_box,
+                    NowPlayingKey::PlaybackQueueIndex as i32,
+                    value,
+                );
             }
             if let Some(value) = info.playback_queue_count {
-                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::PlaybackQueueCount as i32, value);
+                ffi::mp_now_playing_info_box_set_u64(
+                    info_box,
+                    NowPlayingKey::PlaybackQueueCount as i32,
+                    value,
+                );
             }
             if let Some(value) = info.chapter_number {
-                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::ChapterNumber as i32, value);
+                ffi::mp_now_playing_info_box_set_u64(
+                    info_box,
+                    NowPlayingKey::ChapterNumber as i32,
+                    value,
+                );
             }
             if let Some(value) = info.chapter_count {
-                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::ChapterCount as i32, value);
+                ffi::mp_now_playing_info_box_set_u64(
+                    info_box,
+                    NowPlayingKey::ChapterCount as i32,
+                    value,
+                );
             }
             if let Some(value) = info.is_live_stream {
-                ffi::mp_now_playing_info_box_set_bool(info_box, NowPlayingKey::IsLiveStream as i32, i32::from(value));
+                ffi::mp_now_playing_info_box_set_bool(
+                    info_box,
+                    NowPlayingKey::IsLiveStream as i32,
+                    i32::from(value),
+                );
             }
             if let Some(value) = info.collection_identifier.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::CollectionIdentifier as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::CollectionIdentifier as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.external_content_identifier.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::ExternalContentIdentifier as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::ExternalContentIdentifier as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.external_user_profile_identifier.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::ExternalUserProfileIdentifier as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::ExternalUserProfileIdentifier as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.service_identifier.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::ServiceIdentifier as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::ServiceIdentifier as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.playback_progress {
-                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::PlaybackProgress as i32, value);
+                ffi::mp_now_playing_info_box_set_double(
+                    info_box,
+                    NowPlayingKey::PlaybackProgress as i32,
+                    value,
+                );
             }
             if let Some(value) = info.media_type {
-                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::MediaType as i32, value as u64);
+                ffi::mp_now_playing_info_box_set_u64(
+                    info_box,
+                    NowPlayingKey::MediaType as i32,
+                    value as u64,
+                );
             }
             if let Some(value) = info.asset_url.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_url(info_box, NowPlayingKey::AssetURL as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_url(
+                    info_box,
+                    NowPlayingKey::AssetURL as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.current_playback_date {
                 ffi::mp_now_playing_info_box_set_date_seconds(
@@ -589,11 +714,19 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.credits_start_time {
-                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::CreditsStartTime as i32, value);
+                ffi::mp_now_playing_info_box_set_double(
+                    info_box,
+                    NowPlayingKey::CreditsStartTime as i32,
+                    value,
+                );
             }
             if let Some(value) = info.international_standard_recording_code.as_deref() {
                 let value = mk(value);
-                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::InternationalStandardRecordingCode as i32, value.as_ptr());
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::InternationalStandardRecordingCode as i32,
+                    value.as_ptr(),
+                );
             }
             if let Some(value) = info.exclude_from_suggestions {
                 ffi::mp_now_playing_info_box_set_bool(
@@ -604,6 +737,20 @@ impl NowPlayingInfoCenter {
             }
             if let Some(artwork) = artwork {
                 ffi::mp_now_playing_info_box_set_artwork(info_box, artwork.ptr);
+            }
+            if let Some(animated_artwork) = info.animated_artwork_1x1.as_ref() {
+                ffi::mp_now_playing_info_box_set_animated_artwork(
+                    info_box,
+                    NowPlayingKey::AnimatedArtwork1x1 as i32,
+                    animated_artwork.ptr,
+                );
+            }
+            if let Some(animated_artwork) = info.animated_artwork_3x4.as_ref() {
+                ffi::mp_now_playing_info_box_set_animated_artwork(
+                    info_box,
+                    NowPlayingKey::AnimatedArtwork3x4 as i32,
+                    animated_artwork.ptr,
+                );
             }
             if !info.available_language_option_groups.is_empty() {
                 let group_ptrs = info
@@ -684,6 +831,8 @@ enum NowPlayingKey {
     CreditsStartTime = 20,
     InternationalStandardRecordingCode = 21,
     ExcludeFromSuggestions = 22,
+    AnimatedArtwork1x1 = 23,
+    AnimatedArtwork3x4 = 24,
 }
 
 fn copy_lines(ptr: *mut core::ffi::c_char) -> Vec<String> {
@@ -700,4 +849,131 @@ fn system_time_to_unix_seconds(value: SystemTime) -> f64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs_f64()
+}
+
+#[cfg(test)]
+mod tests {
+    use core::ffi::{c_char, c_void};
+    use std::ffi::CString;
+
+    use super::{LanguageOption, LanguageOptionGroup, LanguageOptionType};
+
+    unsafe extern "C" {
+        fn mp_test_media_selection_option_new(
+            kind: i32,
+            language_tag: *const c_char,
+            display_name: *const c_char,
+            identifier: *const c_char,
+        ) -> *mut c_void;
+        fn mp_test_media_selection_option_release(option: *mut c_void);
+        fn mp_test_media_selection_group_new(
+            options: *const *mut c_void,
+            count: usize,
+            default_index: i32,
+            allow_empty_selection: i32,
+        ) -> *mut c_void;
+        fn mp_test_media_selection_group_release(group: *mut c_void);
+    }
+
+    #[test]
+    fn av_media_selection_option_bridge_creates_language_option() {
+        let language_tag = CString::new("en").expect("language tag should be valid");
+        let display_name = CString::new("English Audio").expect("display name should be valid");
+        let identifier = CString::new("audio-en").expect("identifier should be valid");
+        let option = unsafe {
+            mp_test_media_selection_option_new(
+                0,
+                language_tag.as_ptr(),
+                display_name.as_ptr(),
+                identifier.as_ptr(),
+            )
+        };
+        assert!(
+            !option.is_null(),
+            "fixture AVMediaSelectionOption should be created"
+        );
+
+        let language_option = unsafe { LanguageOption::from_av_media_selection_option_raw(option) }
+            .expect("audible AVMediaSelectionOption should convert to a language option");
+        assert_eq!(
+            language_option.language_option_type(),
+            LanguageOptionType::Audible
+        );
+        assert_eq!(language_option.language_tag().as_deref(), Some("en"));
+        assert_eq!(
+            language_option.display_name().as_deref(),
+            Some("English Audio")
+        );
+        assert!(language_option.identifier().is_some());
+
+        unsafe { mp_test_media_selection_option_release(option) };
+    }
+
+    #[test]
+    fn av_media_selection_option_bridge_ignores_non_language_media() {
+        let display_name = CString::new("Video").expect("display name should be valid");
+        let identifier = CString::new("video-main").expect("identifier should be valid");
+        let option = unsafe {
+            mp_test_media_selection_option_new(
+                2,
+                std::ptr::null(),
+                display_name.as_ptr(),
+                identifier.as_ptr(),
+            )
+        };
+        assert!(
+            !option.is_null(),
+            "fixture AVMediaSelectionOption should be created"
+        );
+        assert!(unsafe { LanguageOption::from_av_media_selection_option_raw(option) }.is_none());
+        unsafe { mp_test_media_selection_option_release(option) };
+    }
+
+    #[test]
+    fn av_media_selection_group_bridge_creates_language_option_group() {
+        let english = unsafe {
+            let display_name =
+                CString::new("English Subtitles").expect("display name should be valid");
+            let identifier = CString::new("subtitles-en").expect("identifier should be valid");
+            let language_tag = CString::new("en").expect("language tag should be valid");
+            mp_test_media_selection_option_new(
+                1,
+                language_tag.as_ptr(),
+                display_name.as_ptr(),
+                identifier.as_ptr(),
+            )
+        };
+        let swedish = unsafe {
+            let display_name =
+                CString::new("Swedish Subtitles").expect("display name should be valid");
+            let identifier = CString::new("subtitles-sv").expect("identifier should be valid");
+            let language_tag = CString::new("sv").expect("language tag should be valid");
+            mp_test_media_selection_option_new(
+                1,
+                language_tag.as_ptr(),
+                display_name.as_ptr(),
+                identifier.as_ptr(),
+            )
+        };
+        let options = [english, swedish];
+        let group =
+            unsafe { mp_test_media_selection_group_new(options.as_ptr(), options.len(), 1, 1) };
+        assert!(
+            !group.is_null(),
+            "fixture AVMediaSelectionGroup should be created"
+        );
+
+        let language_group =
+            unsafe { LanguageOptionGroup::from_av_media_selection_group_raw(group) }
+                .expect("AVMediaSelectionGroup should convert to a language option group");
+        assert_eq!(language_group.count(), 2);
+        assert_eq!(language_group.default_language_option_index(), Some(1));
+        assert!(language_group.allow_empty_selection());
+
+        unsafe {
+            mp_test_media_selection_group_release(group);
+            mp_test_media_selection_option_release(english);
+            mp_test_media_selection_option_release(swedish);
+        }
+    }
 }

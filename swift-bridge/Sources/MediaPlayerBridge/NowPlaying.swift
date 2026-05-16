@@ -25,6 +25,8 @@ private enum MPNowPlayingKey: Int32 {
     case creditsStartTime = 20
     case internationalStandardRecordingCode = 21
     case excludeFromSuggestions = 22
+    case animatedArtwork1x1 = 23
+    case animatedArtwork3x4 = 24
 }
 
 final class MPNowPlayingInfoBox: NSObject {
@@ -94,6 +96,16 @@ private func mpNowPlayingDictionaryKey(_ rawValue: Int32) -> String? {
     case .excludeFromSuggestions:
         if #available(macOS 15.0, *) {
             return MPNowPlayingInfoPropertyExcludeFromSuggestions
+        }
+        return nil
+    case .animatedArtwork1x1:
+        if #available(macOS 16.0, *) {
+            return MPNowPlayingInfoProperty1x1AnimatedArtwork
+        }
+        return nil
+    case .animatedArtwork3x4:
+        if #available(macOS 16.0, *) {
+            return MPNowPlayingInfoProperty3x4AnimatedArtwork
         }
         return nil
     }
@@ -208,6 +220,20 @@ public func mp_now_playing_info_box_set_artwork(
     let box: MPNowPlayingInfoBox = mpBorrow(info)
     let artwork: MPMediaItemArtwork = mpBorrow(artworkPtr)
     box.info[MPMediaItemPropertyArtwork] = artwork
+}
+
+@_cdecl("mp_now_playing_info_box_set_animated_artwork")
+public func mp_now_playing_info_box_set_animated_artwork(
+    _ info: UnsafeMutableRawPointer?,
+    _ keyId: Int32,
+    _ artworkPtr: UnsafeMutableRawPointer?
+) {
+    guard #available(macOS 16.0, *), let info, let artworkPtr, let key = mpNowPlayingDictionaryKey(keyId) else {
+        return
+    }
+    let box: MPNowPlayingInfoBox = mpBorrow(info)
+    let artwork: MPMediaItemAnimatedArtwork = mpBorrow(artworkPtr)
+    box.info[key] = artwork
 }
 
 @_cdecl("mp_now_playing_info_box_set_available_language_option_groups")

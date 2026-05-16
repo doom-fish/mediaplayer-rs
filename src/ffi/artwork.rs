@@ -17,4 +17,11 @@ extern "C" {
         height: *mut c_double,
     ) -> c_int;
     pub fn mp_artwork_release(artwork: *mut c_void);
+
+    pub fn mp_animated_artwork_new_from_files(
+        artwork_id: *const c_char,
+        preview_image_path: *const c_char,
+        video_asset_path: *const c_char,
+    ) -> *mut c_void;
+    pub fn mp_animated_artwork_release(artwork: *mut c_void);
 }

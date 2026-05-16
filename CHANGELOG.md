@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.1] - 2026-05-16
+
+### Added
+
+- `ContentItem` wrapper for `MPContentItem` with metadata, artwork, progress, and playback-state setters/getters.
+- `AnimatedArtwork::from_files` plus `NowPlayingInfo::{animated_artwork_1x1, animated_artwork_3x4}` for `MPMediaItemAnimatedArtwork` and the animated now-playing artwork keys.
+- Raw-pointer bridge helpers `LanguageOption::from_av_media_selection_option_raw` and `LanguageOptionGroup::from_av_media_selection_group_raw` for the MediaPlayer AVFoundation language-option categories.
+- `MediaType` bitflags, `MediaEntityPersistentId`, and symbolic constant exports covering the remaining `MPMediaEntity`, `MPMediaItem`, `MPMediaPlaylist`, `MPMediaPlayback`, and `MPLanguageOptionCharacteristic*` surfaces.
+- Coverage-closing tests for content items, animated artwork, AV media-selection conversions, and constant smoke coverage, plus `examples/13_content_item_smoke.rs`.
+
 ## [0.2.0] - 2026-05-16
 
 ### Added

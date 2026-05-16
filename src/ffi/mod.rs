@@ -1,6 +1,7 @@
 #![allow(missing_docs, non_camel_case_types)]
 
 mod artwork;
+mod content_item;
 mod core;
 mod media_item;
 mod media_item_collection;
@@ -15,6 +16,7 @@ mod system_music_player;
 mod volume_view;
 
 pub use artwork::*;
+pub use content_item::*;
 pub use core::*;
 pub use media_item::*;
 pub use media_item_collection::*;

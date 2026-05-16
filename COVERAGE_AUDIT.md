@@ -1,10 +1,10 @@
 # mediaplayer coverage audit (vs MacOSX26.2.sdk)
 
 SDK_PUBLIC_SYMBOLS: 121
-VERIFIED: 59
-GAPS: 61
+VERIFIED: 120
+GAPS: 0
 EXEMPT: 1
-COVERAGE_PCT: 49.17%
+COVERAGE_PCT: 100.00%
 
 - Counted top-level public declarations only (interfaces/categories/protocols, typedefs/enums, exported constants/functions), per the audit instructions.
 - Exported constants that remain macOS-available were kept in scope even when their owning class/protocol is macOS-unavailable; this notably affects `MPMediaItemProperty*`, `MPMediaPlaylistProperty*`, and `MPMediaPlaybackIsPreparedToPlayDidChangeNotification`.
@@ -71,71 +71,70 @@ COVERAGE_PCT: 49.17%
 | `MPShuffleType` | enum | `MPRemoteControlTypes.h` | ShuffleType |
 | `MPRepeatType` | enum | `MPRemoteControlTypes.h` | RepeatType |
 | `MPChangeLanguageOptionSetting` | enum | `MPRemoteControlTypes.h` | LanguageOptionSetting |
+| `AVMediaSelectionOption (MPNowPlayingInfoLanguageOptionAdditions)` | category | `AVFoundation+MPNowPlayingInfoLanguageOptionAdditions.h` | LanguageOption::from_av_media_selection_option_raw |
+| `AVMediaSelectionGroup (MPNowPlayingInfoLanguageOptionAdditions)` | category | `AVFoundation+MPNowPlayingInfoLanguageOptionAdditions.h` | LanguageOptionGroup::from_av_media_selection_group_raw |
+| `MPContentItem` | class | `MPContentItem.h` | ContentItem::{new, identifier, title, set_title, subtitle, set_subtitle, artwork, set_artwork, playback_progress, set_playback_progress, is_streaming_content, set_streaming_content, is_explicit_content, set_explicit_content, is_container, set_container, is_playable, set_playable} |
+| `MPMediaEntityPersistentID` | typedef | `MPMediaEntity.h` | MediaEntityPersistentId |
+| `MPMediaEntityPropertyPersistentID` | constant | `MPMediaEntity.h` | constants::MEDIA_ENTITY_PERSISTENT_ID |
+| `MPMediaItemAnimatedArtwork` | class | `MPMediaItem.h` | AnimatedArtwork::from_files; NowPlayingInfo::{animated_artwork_1x1, animated_artwork_3x4} |
+| `MPMediaType` | enum | `MPMediaItem.h` | MediaType |
+| `MPMediaItemPropertyPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PERSISTENT_ID |
+| `MPMediaItemPropertyMediaType` | constant | `MPMediaItem.h` | MediaType; constants::MEDIA_ITEM_MEDIA_TYPE |
+| `MPMediaItemPropertyAlbumPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_PERSISTENT_ID |
+| `MPMediaItemPropertyArtistPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ARTIST_PERSISTENT_ID |
+| `MPMediaItemPropertyAlbumArtist` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_ARTIST |
+| `MPMediaItemPropertyAlbumArtistPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_ARTIST_PERSISTENT_ID |
+| `MPMediaItemPropertyGenre` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_GENRE |
+| `MPMediaItemPropertyGenrePersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_GENRE_PERSISTENT_ID |
+| `MPMediaItemPropertyComposer` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMPOSER |
+| `MPMediaItemPropertyComposerPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMPOSER_PERSISTENT_ID |
+| `MPMediaItemPropertyAlbumTrackNumber` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_TRACK_NUMBER |
+| `MPMediaItemPropertyAlbumTrackCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_TRACK_COUNT |
+| `MPMediaItemPropertyDiscNumber` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DISC_NUMBER |
+| `MPMediaItemPropertyDiscCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DISC_COUNT |
+| `MPMediaItemPropertyIsExplicit` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_EXPLICIT |
+| `MPMediaItemPropertyLyrics` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_LYRICS |
+| `MPMediaItemPropertyIsCompilation` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_COMPILATION |
+| `MPMediaItemPropertyReleaseDate` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_RELEASE_DATE |
+| `MPMediaItemPropertyBeatsPerMinute` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_BEATS_PER_MINUTE |
+| `MPMediaItemPropertyComments` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMMENTS |
+| `MPMediaItemPropertyAssetURL` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ASSET_URL |
+| `MPMediaItemPropertyIsCloudItem` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_CLOUD_ITEM |
+| `MPMediaItemPropertyHasProtectedAsset` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_HAS_PROTECTED_ASSET |
+| `MPMediaItemPropertyPodcastTitle` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PODCAST_TITLE |
+| `MPMediaItemPropertyPodcastPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PODCAST_PERSISTENT_ID |
+| `MPMediaItemPropertyPlayCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PLAY_COUNT |
+| `MPMediaItemPropertySkipCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_SKIP_COUNT |
+| `MPMediaItemPropertyRating` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_RATING |
+| `MPMediaItemPropertyLastPlayedDate` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_LAST_PLAYED_DATE |
+| `MPMediaItemPropertyUserGrouping` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_USER_GROUPING |
+| `MPMediaItemPropertyBookmarkTime` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_BOOKMARK_TIME |
+| `MPMediaItemPropertyDateAdded` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DATE_ADDED |
+| `MPMediaItemPropertyPlaybackStoreID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PLAYBACK_STORE_ID |
+| `MPMediaItemPropertyIsPreorder` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_PREORDER |
+| `MPMediaPlaybackIsPreparedToPlayDidChangeNotification` | constant | `MPMediaPlayback.h` | constants::PLAYBACK_IS_PREPARED_TO_PLAY_DID_CHANGE_NOTIFICATION |
+| `MPMediaPlaylistPropertyPersistentID` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_PERSISTENT_ID |
+| `MPMediaPlaylistPropertyCloudGlobalID` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_CLOUD_GLOBAL_ID |
+| `MPMediaPlaylistPropertyName` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_NAME |
+| `MPMediaPlaylistPropertyPlaylistAttributes` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_PLAYLIST_ATTRIBUTES |
+| `MPMediaPlaylistPropertySeedItems` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_SEED_ITEMS |
+| `MPMediaPlaylistPropertyDescriptionText` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_DESCRIPTION_TEXT |
+| `MPMediaPlaylistPropertyAuthorDisplayName` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_AUTHOR_DISPLAY_NAME |
+| `MPNowPlayingInfoProperty1x1AnimatedArtwork` | constant | `MPNowPlayingInfoCenter.h` | constants::ANIMATED_ARTWORK_1X1; NowPlayingInfo::animated_artwork_1x1 |
+| `MPNowPlayingInfoProperty3x4AnimatedArtwork` | constant | `MPNowPlayingInfoCenter.h` | constants::ANIMATED_ARTWORK_3X4; NowPlayingInfo::animated_artwork_3x4 |
+| `MPLanguageOptionCharacteristicIsMainProgramContent` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_IS_MAIN_PROGRAM_CONTENT |
+| `MPLanguageOptionCharacteristicIsAuxiliaryContent` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_IS_AUXILIARY_CONTENT |
+| `MPLanguageOptionCharacteristicContainsOnlyForcedSubtitles` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_CONTAINS_ONLY_FORCED_SUBTITLES |
+| `MPLanguageOptionCharacteristicTranscribesSpokenDialog` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_TRANSCRIBES_SPOKEN_DIALOG |
+| `MPLanguageOptionCharacteristicDescribesMusicAndSound` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DESCRIBES_MUSIC_AND_SOUND |
+| `MPLanguageOptionCharacteristicEasyToRead` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_EASY_TO_READ |
+| `MPLanguageOptionCharacteristicDescribesVideo` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DESCRIBES_VIDEO |
+| `MPLanguageOptionCharacteristicLanguageTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_LANGUAGE_TRANSLATION |
+| `MPLanguageOptionCharacteristicDubbedTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DUBBED_TRANSLATION |
+| `MPLanguageOptionCharacteristicVoiceOverTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_VOICE_OVER_TRANSLATION |
 
 ## 🔴 GAPS
-| Symbol | Kind | Header | Notes |
-| --- | --- | --- | --- |
-| `AVMediaSelectionOption (MPNowPlayingInfoLanguageOptionAdditions)` | category | `AVFoundation+MPNowPlayingInfoLanguageOptionAdditions.h` | No wrapper for makeNowPlayingInfoLanguageOption(). |
-| `AVMediaSelectionGroup (MPNowPlayingInfoLanguageOptionAdditions)` | category | `AVFoundation+MPNowPlayingInfoLanguageOptionAdditions.h` | No wrapper for makeNowPlayingInfoLanguageOptionGroup(). |
-| `MPContentItem` | class | `MPContentItem.h` | No Rust wrapper for the macOS-available content-item type. |
-| `MPMediaEntityPersistentID` | typedef | `MPMediaEntity.h` | No Rust alias for MediaPlayer persistent IDs. |
-| `MPMediaEntityPropertyPersistentID` | constant | `MPMediaEntity.h` | No public wrapper for the exported entity-property key. |
-| `MPMediaItemAnimatedArtwork` | class | `MPMediaItem.h` | Animated artwork construction is not wrapped. |
-| `MPMediaType` | enum | `MPMediaItem.h` | No Rust enum for MPMediaType. |
-| `MPMediaItemPropertyPersistentID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyMediaType` | constant | `MPMediaItem.h` | The crate exposes NowPlayingMediaType, but not the distinct MPMediaType/MPMediaItemPropertyMediaType surface. |
-| `MPMediaItemPropertyAlbumPersistentID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyArtistPersistentID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyAlbumArtist` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyAlbumArtistPersistentID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyGenre` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyGenrePersistentID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyComposer` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyComposerPersistentID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyAlbumTrackNumber` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyAlbumTrackCount` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyDiscNumber` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyDiscCount` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyIsExplicit` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyLyrics` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyIsCompilation` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyReleaseDate` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyBeatsPerMinute` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyComments` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyAssetURL` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyIsCloudItem` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyHasProtectedAsset` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyPodcastTitle` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyPodcastPersistentID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyPlayCount` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertySkipCount` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyRating` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyLastPlayedDate` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyUserGrouping` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyBookmarkTime` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyDateAdded` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyPlaybackStoreID` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaItemPropertyIsPreorder` | constant | `MPMediaItem.h` | No public wrapper for the exported MPMediaItemProperty constant. |
-| `MPMediaPlaybackIsPreparedToPlayDidChangeNotification` | constant | `MPMediaPlayback.h` | Notification constant is not surfaced. |
-| `MPMediaPlaylistPropertyPersistentID` | constant | `MPMediaPlaylist.h` | MediaPlaylist is only exposed as an unsupported stub; exported playlist property constants are not surfaced. |
-| `MPMediaPlaylistPropertyCloudGlobalID` | constant | `MPMediaPlaylist.h` | MediaPlaylist is only exposed as an unsupported stub; exported playlist property constants are not surfaced. |
-| `MPMediaPlaylistPropertyName` | constant | `MPMediaPlaylist.h` | MediaPlaylist is only exposed as an unsupported stub; exported playlist property constants are not surfaced. |
-| `MPMediaPlaylistPropertyPlaylistAttributes` | constant | `MPMediaPlaylist.h` | MediaPlaylist is only exposed as an unsupported stub; exported playlist property constants are not surfaced. |
-| `MPMediaPlaylistPropertySeedItems` | constant | `MPMediaPlaylist.h` | MediaPlaylist is only exposed as an unsupported stub; exported playlist property constants are not surfaced. |
-| `MPMediaPlaylistPropertyDescriptionText` | constant | `MPMediaPlaylist.h` | MediaPlaylist is only exposed as an unsupported stub; exported playlist property constants are not surfaced. |
-| `MPMediaPlaylistPropertyAuthorDisplayName` | constant | `MPMediaPlaylist.h` | MediaPlaylist is only exposed as an unsupported stub; exported playlist property constants are not surfaced. |
-| `MPNowPlayingInfoProperty1x1AnimatedArtwork` | constant | `MPNowPlayingInfoCenter.h` | No animated-artwork setter or MPMediaItemAnimatedArtwork wrapper is exposed. |
-| `MPNowPlayingInfoProperty3x4AnimatedArtwork` | constant | `MPNowPlayingInfoCenter.h` | No animated-artwork setter or MPMediaItemAnimatedArtwork wrapper is exposed. |
-| `MPLanguageOptionCharacteristicIsMainProgramContent` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicIsAuxiliaryContent` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicContainsOnlyForcedSubtitles` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicTranscribesSpokenDialog` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicDescribesMusicAndSound` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicEasyToRead` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicDescribesVideo` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicLanguageTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicDubbedTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
-| `MPLanguageOptionCharacteristicVoiceOverTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | No Rust constant exports this framework string; callers must hand-roll it. |
+None.
 
 ## ⏭️ EXEMPT
 | Symbol | Kind | Header | Reason | SDK attribute |

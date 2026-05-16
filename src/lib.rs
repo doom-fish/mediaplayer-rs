@@ -9,6 +9,7 @@
 
 pub mod artwork;
 pub mod constants;
+pub mod content_item;
 pub mod error;
 pub mod ffi;
 pub mod media_item;
@@ -25,32 +26,34 @@ pub mod volume_view;
 
 mod unsupported;
 
-pub use artwork::Artwork;
+pub use artwork::{AnimatedArtwork, Artwork};
+pub use content_item::ContentItem;
 pub use error::{ErrorCode, MediaPlayerError, ERROR_DOMAIN};
-pub use media_item::MediaItem;
+pub use media_item::{MediaEntityPersistentId, MediaItem, MediaType};
 pub use media_item_collection::MediaItemCollection;
 pub use media_library::MediaLibrary;
 pub use media_playlist::MediaPlaylist;
 pub use media_query::MediaQuery;
 pub use music_player::MusicPlayer;
 pub use now_playing::{
-    LanguageOption, LanguageOptionGroup, LanguageOptionType, NowPlayingInfo,
-    NowPlayingInfoCenter, NowPlayingMediaType, PlaybackState,
+    LanguageOption, LanguageOptionGroup, LanguageOptionType, NowPlayingInfo, NowPlayingInfoCenter,
+    NowPlayingMediaType, PlaybackState,
 };
 pub use playable_content_data_source::PlayableContentDataSource;
 pub use remote_commands::{
     ChangePlaybackPositionCommand, ChangePlaybackRateCommand, ChangeRepeatModeCommand,
-    ChangeShuffleModeCommand, Command, CommandEvent, CommandToken, FeedbackCommand,
-    HandlerStatus, LanguageOptionSetting, RatingCommand, RemoteCommand,
-    RemoteCommandCenter, RepeatType, SeekType, ShuffleType, SkipIntervalCommand,
+    ChangeShuffleModeCommand, Command, CommandEvent, CommandToken, FeedbackCommand, HandlerStatus,
+    LanguageOptionSetting, RatingCommand, RemoteCommand, RemoteCommandCenter, RepeatType, SeekType,
+    ShuffleType, SkipIntervalCommand,
 };
 pub use system_music_player::SystemMusicPlayer;
 pub use volume_view::VolumeView;
 
 pub mod prelude {
-    pub use crate::artwork::Artwork;
+    pub use crate::artwork::{AnimatedArtwork, Artwork};
+    pub use crate::content_item::ContentItem;
     pub use crate::error::{ErrorCode, MediaPlayerError, ERROR_DOMAIN};
-    pub use crate::media_item::MediaItem;
+    pub use crate::media_item::{MediaEntityPersistentId, MediaItem, MediaType};
     pub use crate::media_item_collection::MediaItemCollection;
     pub use crate::media_library::MediaLibrary;
     pub use crate::media_playlist::MediaPlaylist;
@@ -64,8 +67,8 @@ pub mod prelude {
     pub use crate::remote_commands::{
         ChangePlaybackPositionCommand, ChangePlaybackRateCommand, ChangeRepeatModeCommand,
         ChangeShuffleModeCommand, Command, CommandEvent, CommandToken, FeedbackCommand,
-        HandlerStatus, LanguageOptionSetting, RatingCommand, RemoteCommand,
-        RemoteCommandCenter, RepeatType, SeekType, ShuffleType, SkipIntervalCommand,
+        HandlerStatus, LanguageOptionSetting, RatingCommand, RemoteCommand, RemoteCommandCenter,
+        RepeatType, SeekType, ShuffleType, SkipIntervalCommand,
     };
     pub use crate::system_music_player::SystemMusicPlayer;
     pub use crate::volume_view::VolumeView;

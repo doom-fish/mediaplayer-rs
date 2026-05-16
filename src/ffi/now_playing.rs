@@ -10,24 +10,21 @@ extern "C" {
         key_id: c_int,
         value: *const c_char,
     );
-    pub fn mp_now_playing_info_box_set_double(
-        info: *mut c_void,
-        key_id: c_int,
-        value: c_double,
-    );
+    pub fn mp_now_playing_info_box_set_double(info: *mut c_void, key_id: c_int, value: c_double);
     pub fn mp_now_playing_info_box_set_u64(info: *mut c_void, key_id: c_int, value: u64);
     pub fn mp_now_playing_info_box_set_bool(info: *mut c_void, key_id: c_int, value: c_int);
-    pub fn mp_now_playing_info_box_set_url(
-        info: *mut c_void,
-        key_id: c_int,
-        value: *const c_char,
-    );
+    pub fn mp_now_playing_info_box_set_url(info: *mut c_void, key_id: c_int, value: *const c_char);
     pub fn mp_now_playing_info_box_set_date_seconds(
         info: *mut c_void,
         key_id: c_int,
         value: c_double,
     );
     pub fn mp_now_playing_info_box_set_artwork(info: *mut c_void, artwork: *mut c_void);
+    pub fn mp_now_playing_info_box_set_animated_artwork(
+        info: *mut c_void,
+        key_id: c_int,
+        artwork: *mut c_void,
+    );
     pub fn mp_now_playing_info_box_set_available_language_option_groups(
         info: *mut c_void,
         groups: *const *mut c_void,
@@ -61,6 +58,7 @@ extern "C" {
     pub fn mp_language_option_copy_identifier(option: *mut c_void) -> *mut c_char;
     pub fn mp_language_option_is_automatic_legible(option: *mut c_void) -> c_int;
     pub fn mp_language_option_is_automatic_audible(option: *mut c_void) -> c_int;
+    pub fn mp_language_option_new_from_media_selection_option(option: *mut c_void) -> *mut c_void;
 
     pub fn mp_language_option_group_new(
         options: *const *mut c_void,
@@ -72,4 +70,7 @@ extern "C" {
     pub fn mp_language_option_group_get_count(group: *mut c_void) -> usize;
     pub fn mp_language_option_group_get_default_index(group: *mut c_void) -> c_int;
     pub fn mp_language_option_group_allows_empty_selection(group: *mut c_void) -> c_int;
+    pub fn mp_language_option_group_new_from_media_selection_group(
+        group: *mut c_void,
+    ) -> *mut c_void;
 }

@@ -1,4 +1,4 @@
-//! `MPMediaItemArtwork` wrapper.
+//! `MPMediaItemArtwork` and `MPMediaItemAnimatedArtwork` wrappers.
 
 use std::ffi::CString;
 
@@ -30,9 +30,7 @@ impl Clone for Artwork {
 
 impl std::fmt::Debug for Artwork {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Artwork")
-            .field("ptr", &self.ptr)
-            .finish()
+        f.debug_struct("Artwork").field("ptr", &self.ptr).finish()
     }
 }
 
@@ -111,6 +109,75 @@ impl Drop for Artwork {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
             unsafe { ffi::mp_artwork_release(self.ptr) }
+        }
+    }
+}
+
+/// An `MPMediaItemAnimatedArtwork` backed by a preview image and local video asset.
+pub struct AnimatedArtwork {
+    pub(crate) ptr: *mut core::ffi::c_void,
+}
+
+// SAFETY: The underlying object is a reference-counted ObjC object.
+unsafe impl Send for AnimatedArtwork {}
+unsafe impl Sync for AnimatedArtwork {}
+
+impl Clone for AnimatedArtwork {
+    fn clone(&self) -> Self {
+        let ptr = unsafe { ffi::mp_object_retain(self.ptr) };
+        Self { ptr }
+    }
+}
+
+impl std::fmt::Debug for AnimatedArtwork {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnimatedArtwork")
+            .field("ptr", &self.ptr)
+            .finish()
+    }
+}
+
+impl AnimatedArtwork {
+    /// Create animated artwork backed by a preview image and local video file.
+    ///
+    /// # Errors
+    /// Returns [`MediaPlayerError::InvalidArgument`] if any string contains an
+    /// interior NUL byte, or [`MediaPlayerError::Framework`] if the framework
+    /// refuses to create the animated artwork.
+    pub fn from_files(
+        artwork_id: &str,
+        preview_image_path: &str,
+        video_asset_path: &str,
+    ) -> Result<Self, MediaPlayerError> {
+        let artwork_id = CString::new(artwork_id)
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
+        let preview_image_path = CString::new(preview_image_path)
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
+        let video_asset_path = CString::new(video_asset_path)
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
+
+        let ptr = unsafe {
+            ffi::mp_animated_artwork_new_from_files(
+                artwork_id.as_ptr(),
+                preview_image_path.as_ptr(),
+                video_asset_path.as_ptr(),
+            )
+        };
+
+        if ptr.is_null() {
+            Err(MediaPlayerError::Framework(
+                "failed to create MPMediaItemAnimatedArtwork from local files".to_string(),
+            ))
+        } else {
+            Ok(Self { ptr })
+        }
+    }
+}
+
+impl Drop for AnimatedArtwork {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe { ffi::mp_animated_artwork_release(self.ptr) }
         }
     }
 }

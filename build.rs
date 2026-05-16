@@ -13,6 +13,7 @@ fn main() {
     println!("cargo:rustc-link-lib=framework=MediaPlayer");
     println!("cargo:rustc-link-lib=framework=Foundation");
     println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=AVFoundation");
 
     let swift_dir = "swift-bridge";
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR missing");
