@@ -1,17 +1,29 @@
 # mediaplayer-rs
 
-Safe Rust bindings for Apple's `MediaPlayer.framework` on macOS — Now Playing info and Remote Commands.
+Safe Rust bindings for Apple's `MediaPlayer.framework` on macOS.
 
-> **Status:** v0.1.0 covers `MPNowPlayingInfoCenter` metadata, `MPRemoteCommandCenter` handler registration, and `MPMediaItemArtwork` creation from file paths.
+> **Status:** v0.2.0 covers the macOS-available now-playing, remote-command, language-option, and artwork APIs, and exposes explicit macOS-unavailable wrappers for the iOS-only `MPMediaLibrary`, `MPMediaQuery`, `MPMusicPlayer`, `MPMediaItem`, `MPMediaItemCollection`, `MPMediaPlaylist`, `MPVolumeView`, `MPSystemMusicPlayer`, and `MPPlayableContentDataSource` areas.
 
 ## Quick start
 
 ```rust,no_run
+use std::time::UNIX_EPOCH;
+
 use mediaplayer::prelude::*;
 
 fn main() {
-    let center = NowPlayingInfoCenter::default_center();
+    let subtitles = LanguageOption::new(
+        LanguageOptionType::Legible,
+        Some("en"),
+        &["public.legible"],
+        "English Subtitles",
+        "subtitles-en",
+    )
+    .unwrap();
 
+    let subtitle_group = LanguageOptionGroup::new(&[subtitles.clone()], Some(0), true).unwrap();
+
+    let center = NowPlayingInfoCenter::default_center();
     let info = NowPlayingInfo::new()
         .title("My Song")
         .artist("doom-fish")
@@ -19,40 +31,64 @@ fn main() {
         .playback_duration(300.0)
         .elapsed_playback_time(0.0)
         .playback_rate(1.0)
+        .default_playback_rate(1.0)
+        .playback_queue_index(0)
+        .playback_queue_count(1)
+        .available_language_option_groups(vec![subtitle_group])
+        .current_language_options(vec![subtitles])
+        .current_playback_date(UNIX_EPOCH)
         .media_type(NowPlayingMediaType::Audio);
 
     center.set_now_playing_info(&info);
     center.set_playback_state(PlaybackState::Playing);
 
-    let rcc = RemoteCommandCenter::shared();
+    let remote = RemoteCommandCenter::shared();
+    remote.play_command().set_enabled(true);
+    remote.skip_forward_command().set_preferred_intervals(&[15.0, 30.0]);
+    remote.change_playback_rate_command().set_supported_playback_rates(&[1.0, 1.5, 2.0]);
 
-    let _play = rcc.on_play(|_| HandlerStatus::Success);
-    let _pause = rcc.on_pause(|_| HandlerStatus::Success);
+    let _play = remote.on_play(|_| HandlerStatus::Success);
+    let _rating = remote.on_rating(|event| {
+        println!("rating event = {:?}", event.rating);
+        HandlerStatus::Success
+    });
 
-    // … your playback loop …
-
-    center.clear();   // or just drop `center`
+    center.clear();
 }
 ```
 
 ## Highlights
 
-- **`NowPlayingInfoCenter`** — fluent `NowPlayingInfo` builder, `set_now_playing_info`, `set_playback_state`, `clear()`, auto-clear on drop.
-- **`RemoteCommandCenter`** — `add_handler` + per-command convenience (`on_play`, `on_pause`, `on_toggle_play_pause`, `on_next_track`, `on_previous_track`, `on_skip_forward`, `on_skip_backward`, `on_seek_forward`, `on_seek_backward`, `on_change_playback_position`).
-- **`CommandToken`** — RAII guard that deregisters and frees the handler on drop.
-- **`Artwork`** — `MPMediaItemArtwork` from a file path; optional explicit bounds `CGSize` via `apple-cf`.
-- **`constants`** — now-playing info dictionary key strings for documentation reference.
+- **`NowPlayingInfoCenter`** — fluent `NowPlayingInfo` builder covering queue state, playback progress, language options, service identifiers, live-stream flags, and playback dates.
+- **`LanguageOption` / `LanguageOptionGroup`** — wrappers for `MPNowPlayingInfoLanguageOption` and `MPNowPlayingInfoLanguageOptionGroup`.
+- **`RemoteCommandCenter`** — zero-cost command handles for base, skip-interval, feedback, rating, playback-rate, shuffle, repeat, and language-option commands.
+- **`CommandToken`** — RAII guard that deregisters closures on drop.
+- **`Artwork`** — `MPMediaItemArtwork` from file paths, plus bounds inspection.
+- **Explicit macOS stubs** — `MediaLibrary`, `MediaQuery`, `MusicPlayer`, `MediaItem`, `MediaItemCollection`, `MediaPlaylist`, `VolumeView`, `SystemMusicPlayer`, and `PlayableContentDataSource` all report the Apple availability reason instead of failing mysteriously.
 
-## Availability
-
-- `MPNowPlayingInfoCenter`, `MPRemoteCommandCenter` — macOS 10.12.2+
-- `MPNowPlayingInfoCenter.playbackState` — macOS 10.12.2+
-- `MPMediaItemArtwork(boundsSize:requestHandler:)` — macOS 10.12.2+
-
-## Smoke example
+## Example matrix
 
 ```bash
 cargo run --example 01_now_playing_smoke
+cargo run --example 02_remote_command_center_smoke
+cargo run --example 03_artwork_smoke
+cargo run --example 04_media_library_unavailable
+cargo run --example 05_media_query_unavailable
+cargo run --example 06_music_player_unavailable
+cargo run --example 07_media_item_unavailable
+cargo run --example 08_media_item_collection_unavailable
+cargo run --example 09_media_playlist_unavailable
+cargo run --example 10_volume_view_unavailable
+cargo run --example 11_system_music_player_unavailable
+cargo run --example 12_playable_content_data_source_unavailable
+```
+
+## Verification
+
+```bash
+cargo clippy --all-targets -- -D warnings
+cargo test
+for ex in examples/*.rs; do cargo run --example "$(basename "$ex" .rs)"; done
 ```
 
 ## License

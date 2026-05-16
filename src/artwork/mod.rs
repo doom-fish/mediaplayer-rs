@@ -2,7 +2,7 @@
 
 use std::ffi::CString;
 
-use apple_cf::cg::CGSize;
+use apple_cf::cg::{CGRect, CGSize};
 
 use crate::{ffi, MediaPlayerError};
 
@@ -21,6 +21,13 @@ pub struct Artwork {
 unsafe impl Send for Artwork {}
 unsafe impl Sync for Artwork {}
 
+impl Clone for Artwork {
+    fn clone(&self) -> Self {
+        let ptr = unsafe { ffi::mp_object_retain(self.ptr) };
+        Self { ptr }
+    }
+}
+
 impl std::fmt::Debug for Artwork {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Artwork")
@@ -36,10 +43,10 @@ impl Artwork {
     ///
     /// # Errors
     /// Returns [`MediaPlayerError::Framework`] if the file cannot be read or
-    /// `MPMediaItemArtwork` is unavailable (< macOS 10.12.2).
+    /// `MPMediaItemArtwork` is unavailable.
     pub fn from_path(path: &str) -> Result<Self, MediaPlayerError> {
         let c_path = CString::new(path)
-            .map_err(|e| MediaPlayerError::InvalidArgument(e.to_string()))?;
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
         let ptr = unsafe { ffi::mp_artwork_new_from_path(c_path.as_ptr()) };
         if ptr.is_null() {
             Err(MediaPlayerError::Framework(format!(
@@ -56,7 +63,7 @@ impl Artwork {
     /// Returns [`MediaPlayerError::Framework`] on failure.
     pub fn from_path_with_size(path: &str, bounds_size: CGSize) -> Result<Self, MediaPlayerError> {
         let c_path = CString::new(path)
-            .map_err(|e| MediaPlayerError::InvalidArgument(e.to_string()))?;
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
         let ptr = unsafe {
             ffi::mp_artwork_new_from_path_with_size(
                 c_path.as_ptr(),
@@ -71,6 +78,32 @@ impl Artwork {
         } else {
             Ok(Self { ptr })
         }
+    }
+
+    /// Returns the full artwork bounds reported by the framework.
+    #[must_use]
+    pub fn bounds(&self) -> Option<CGRect> {
+        let mut origin_x = 0.0;
+        let mut origin_y = 0.0;
+        let mut width = 0.0;
+        let mut height = 0.0;
+
+        let ok = unsafe {
+            ffi::mp_artwork_copy_bounds(
+                self.ptr,
+                &mut origin_x,
+                &mut origin_y,
+                &mut width,
+                &mut height,
+            ) != 0
+        };
+
+        ok.then_some(CGRect {
+            x: origin_x,
+            y: origin_y,
+            width,
+            height,
+        })
     }
 }
 

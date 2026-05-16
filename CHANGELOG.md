@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0] - 2026-05-16
+
+### Added
+
+- `LanguageOption` and `LanguageOptionGroup` wrappers for `MPNowPlayingInfoLanguageOption` and `MPNowPlayingInfoLanguageOptionGroup`.
+- Expanded `NowPlayingInfo` coverage for default playback rate, queue/chapter metadata, live-stream state, service/profile identifiers, playback progress, playback date, credits start time, ISRC, and exclude-from-suggestions.
+- `NowPlayingInfoCenter::supported_animated_artwork_keys()` for the macOS 16+ class property.
+- Command-handle wrappers for `MPRemoteCommand`, `MPSkipIntervalCommand`, `MPFeedbackCommand`, `MPRatingCommand`, `MPChangePlaybackRateCommand`, `MPChangePlaybackPositionCommand`, `MPChangeShuffleModeCommand`, and `MPChangeRepeatModeCommand`.
+- Extended remote-command events with rating, playback-rate, feedback, language-option, repeat, and shuffle payloads.
+- `Artwork::bounds()` plus `Clone` support for retained Objective-C wrappers.
+- Explicit macOS-unavailable wrapper modules, Swift bridge files, examples, and tests for `MPMediaLibrary`, `MPMediaQuery`, `MPMusicPlayer`, `MPMediaItem`, `MPMediaItemCollection`, `MPMediaPlaylist`, `MPVolumeView`, `MPSystemMusicPlayer`, and `MPPlayableContentDataSource`.
+- Integration tests for every logical area and numbered examples `01` through `12`.
+- `COVERAGE.md` auditing the framework surface and documenting implemented, partial, and skipped areas.
+
 ## [0.1.0] - 2025-07-14
 
 ### Added

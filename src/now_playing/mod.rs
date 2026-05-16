@@ -1,18 +1,16 @@
-//! Wrapper for `MPNowPlayingInfoCenter` and associated types.
+//! Wrapper for `MPNowPlayingInfoCenter` and related now-playing metadata types.
 
+use core::ffi::c_void;
 use std::ffi::CString;
-use std::ptr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::artwork::Artwork;
-use crate::ffi;
+use crate::{ffi, unsupported, MediaPlayerError};
 
-// ── Media type ────────────────────────────────────────────────────────────────
-
-/// Maps to `MPNowPlayingInfoMediaType` (audio/video classification for the
-/// system Now Playing widget).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u32)]
 #[non_exhaustive]
+/// Maps to `MPNowPlayingInfoMediaType`.
 pub enum NowPlayingMediaType {
     #[default]
     None = 0,
@@ -20,12 +18,10 @@ pub enum NowPlayingMediaType {
     Video = 2,
 }
 
-// ── Playback state ────────────────────────────────────────────────────────────
-
-/// Maps to `MPNowPlayingPlaybackState`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u32)]
 #[non_exhaustive]
+/// Maps to `MPNowPlayingPlaybackState`.
 pub enum PlaybackState {
     #[default]
     Unknown = 0,
@@ -48,25 +44,261 @@ impl PlaybackState {
     }
 }
 
-// ── NowPlayingInfo ────────────────────────────────────────────────────────────
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(i32)]
+/// Maps to `MPNowPlayingInfoLanguageOptionType`.
+pub enum LanguageOptionType {
+    #[default]
+    Audible = 0,
+    Legible = 1,
+}
 
-/// Metadata pushed to `MPNowPlayingInfoCenter.nowPlayingInfo`.
-///
-/// Build with the fluent setter methods, then pass to
-/// [`NowPlayingInfoCenter::set_now_playing_info`].
-///
-/// # Example
-/// ```no_run
-/// use mediaplayer::NowPlayingInfo;
-///
-/// let info = NowPlayingInfo::new()
-///     .title("My Song")
-///     .artist("doom-fish")
-///     .playback_duration(240.0)
-///     .elapsed_playback_time(0.0)
-///     .playback_rate(1.0);
-/// ```
+impl LanguageOptionType {
+    #[must_use]
+    fn from_raw(raw: i32) -> Self {
+        match raw {
+            1 => Self::Legible,
+            _ => Self::Audible,
+        }
+    }
+}
+
+/// Owned wrapper around `MPNowPlayingInfoLanguageOption`.
+pub struct LanguageOption {
+    pub(crate) ptr: *mut c_void,
+}
+
+// SAFETY: `MPNowPlayingInfoLanguageOption` is immutable and reference-counted.
+unsafe impl Send for LanguageOption {}
+unsafe impl Sync for LanguageOption {}
+
+impl std::fmt::Debug for LanguageOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LanguageOption")
+            .field("type", &self.language_option_type())
+            .field("language_tag", &self.language_tag())
+            .field("display_name", &self.display_name())
+            .field("identifier", &self.identifier())
+            .finish()
+    }
+}
+
+impl Clone for LanguageOption {
+    fn clone(&self) -> Self {
+        let ptr = unsafe { ffi::mp_object_retain(self.ptr) };
+        Self { ptr }
+    }
+}
+
+impl LanguageOption {
+    /// Create a language option.
+    ///
+    /// # Errors
+    /// Returns [`MediaPlayerError::InvalidArgument`] if a string contains an
+    /// interior NUL byte, or [`MediaPlayerError::Framework`] if Swift refuses to
+    /// construct the option.
+    pub fn new(
+        language_option_type: LanguageOptionType,
+        language_tag: Option<&str>,
+        characteristics: &[&str],
+        display_name: &str,
+        identifier: &str,
+    ) -> Result<Self, MediaPlayerError> {
+        let display_name = CString::new(display_name)
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
+        let identifier = CString::new(identifier)
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
+        let language_tag = language_tag
+            .map(CString::new)
+            .transpose()
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
+        let characteristics = characteristics
+            .iter()
+            .map(|value| CString::new(*value))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))?;
+        let characteristic_ptrs = characteristics.iter().map(|value| value.as_ptr()).collect::<Vec<_>>();
+
+        let ptr = unsafe {
+            ffi::mp_language_option_new(
+                language_option_type as i32,
+                language_tag.as_ref().map_or(std::ptr::null(), |value| value.as_ptr()),
+                if characteristic_ptrs.is_empty() {
+                    std::ptr::null()
+                } else {
+                    characteristic_ptrs.as_ptr()
+                },
+                characteristic_ptrs.len(),
+                display_name.as_ptr(),
+                identifier.as_ptr(),
+            )
+        };
+
+        if ptr.is_null() {
+            Err(MediaPlayerError::Framework(
+                "failed to create MPNowPlayingInfoLanguageOption".to_string(),
+            ))
+        } else {
+            Ok(Self { ptr })
+        }
+    }
+
+    #[must_use]
+    pub fn language_option_type(&self) -> LanguageOptionType {
+        LanguageOptionType::from_raw(unsafe { ffi::mp_language_option_get_type(self.ptr) })
+    }
+
+    #[must_use]
+    pub fn language_tag(&self) -> Option<String> {
+        unsafe { unsupported::take_string(ffi::mp_language_option_copy_language_tag(self.ptr)) }
+    }
+
+    #[must_use]
+    pub fn characteristics(&self) -> Vec<String> {
+        copy_lines(unsafe { ffi::mp_language_option_copy_characteristics(self.ptr) })
+    }
+
+    #[must_use]
+    pub fn display_name(&self) -> Option<String> {
+        unsafe { unsupported::take_string(ffi::mp_language_option_copy_display_name(self.ptr)) }
+    }
+
+    #[must_use]
+    pub fn identifier(&self) -> Option<String> {
+        unsafe { unsupported::take_string(ffi::mp_language_option_copy_identifier(self.ptr)) }
+    }
+
+    #[must_use]
+    pub fn is_automatic_legible_language_option(&self) -> bool {
+        unsafe { ffi::mp_language_option_is_automatic_legible(self.ptr) != 0 }
+    }
+
+    #[must_use]
+    pub fn is_automatic_audible_language_option(&self) -> bool {
+        unsafe { ffi::mp_language_option_is_automatic_audible(self.ptr) != 0 }
+    }
+
+    pub(crate) unsafe fn from_raw(ptr: *mut c_void) -> Self {
+        Self { ptr }
+    }
+}
+
+impl Drop for LanguageOption {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe { ffi::mp_language_option_release(self.ptr) }
+        }
+    }
+}
+
+/// Owned wrapper around `MPNowPlayingInfoLanguageOptionGroup`.
+pub struct LanguageOptionGroup {
+    pub(crate) ptr: *mut c_void,
+}
+
+// SAFETY: `MPNowPlayingInfoLanguageOptionGroup` is immutable and reference-counted.
+unsafe impl Send for LanguageOptionGroup {}
+unsafe impl Sync for LanguageOptionGroup {}
+
+impl std::fmt::Debug for LanguageOptionGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LanguageOptionGroup")
+            .field("count", &self.count())
+            .field("default_language_option_index", &self.default_language_option_index())
+            .field("allow_empty_selection", &self.allow_empty_selection())
+            .finish()
+    }
+}
+
+impl Clone for LanguageOptionGroup {
+    fn clone(&self) -> Self {
+        let ptr = unsafe { ffi::mp_object_retain(self.ptr) };
+        Self { ptr }
+    }
+}
+
+impl LanguageOptionGroup {
+    /// Create a mutually-exclusive language option group.
+    ///
+    /// # Errors
+    /// Returns [`MediaPlayerError::InvalidArgument`] when `language_options` is
+    /// empty or the requested default index is out of bounds.
+    pub fn new(
+        language_options: &[LanguageOption],
+        default_language_option_index: Option<usize>,
+        allow_empty_selection: bool,
+    ) -> Result<Self, MediaPlayerError> {
+        if language_options.is_empty() {
+            return Err(MediaPlayerError::InvalidArgument(
+                "language option groups must contain at least one option".to_string(),
+            ));
+        }
+
+        if let Some(index) = default_language_option_index {
+            if index >= language_options.len() {
+                return Err(MediaPlayerError::InvalidArgument(format!(
+                    "default language option index {index} is out of bounds"
+                )));
+            }
+        }
+
+        let default_index = default_language_option_index
+            .map(|index| {
+                i32::try_from(index).map_err(|_| {
+                    MediaPlayerError::InvalidArgument(
+                        "default language option index does not fit in i32".to_string(),
+                    )
+                })
+            })
+            .transpose()?
+            .unwrap_or(-1);
+
+        let option_ptrs = language_options.iter().map(|option| option.ptr).collect::<Vec<_>>();
+        let ptr = unsafe {
+            ffi::mp_language_option_group_new(
+                option_ptrs.as_ptr(),
+                option_ptrs.len(),
+                default_index,
+                i32::from(allow_empty_selection),
+            )
+        };
+
+        if ptr.is_null() {
+            Err(MediaPlayerError::Framework(
+                "failed to create MPNowPlayingInfoLanguageOptionGroup".to_string(),
+            ))
+        } else {
+            Ok(Self { ptr })
+        }
+    }
+
+    #[must_use]
+    pub fn count(&self) -> usize {
+        unsafe { ffi::mp_language_option_group_get_count(self.ptr) }
+    }
+
+    #[must_use]
+    pub fn default_language_option_index(&self) -> Option<usize> {
+        let raw = unsafe { ffi::mp_language_option_group_get_default_index(self.ptr) };
+        usize::try_from(raw).ok()
+    }
+
+    #[must_use]
+    pub fn allow_empty_selection(&self) -> bool {
+        unsafe { ffi::mp_language_option_group_allows_empty_selection(self.ptr) != 0 }
+    }
+}
+
+impl Drop for LanguageOptionGroup {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe { ffi::mp_language_option_group_release(self.ptr) }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
+/// Metadata pushed to `MPNowPlayingInfoCenter.nowPlayingInfo`.
 pub struct NowPlayingInfo {
     pub title: Option<String>,
     pub artist: Option<String>,
@@ -74,9 +306,25 @@ pub struct NowPlayingInfo {
     pub playback_duration: Option<f64>,
     pub elapsed_playback_time: Option<f64>,
     pub playback_rate: Option<f64>,
-    pub media_type: Option<NowPlayingMediaType>,
+    pub default_playback_rate: Option<f64>,
+    pub playback_queue_index: Option<u64>,
+    pub playback_queue_count: Option<u64>,
+    pub chapter_number: Option<u64>,
+    pub chapter_count: Option<u64>,
+    pub is_live_stream: Option<bool>,
+    pub available_language_option_groups: Vec<LanguageOptionGroup>,
+    pub current_language_options: Vec<LanguageOption>,
+    pub collection_identifier: Option<String>,
     pub external_content_identifier: Option<String>,
+    pub external_user_profile_identifier: Option<String>,
+    pub service_identifier: Option<String>,
+    pub playback_progress: Option<f64>,
+    pub media_type: Option<NowPlayingMediaType>,
     pub asset_url: Option<String>,
+    pub current_playback_date: Option<SystemTime>,
+    pub credits_start_time: Option<f64>,
+    pub international_standard_recording_code: Option<String>,
+    pub exclude_from_suggestions: Option<bool>,
 }
 
 impl NowPlayingInfo {
@@ -98,20 +346,20 @@ impl NowPlayingInfo {
     }
 
     #[must_use]
-    pub fn album_title(mut self, album: impl Into<String>) -> Self {
-        self.album_title = Some(album.into());
+    pub fn album_title(mut self, album_title: impl Into<String>) -> Self {
+        self.album_title = Some(album_title.into());
         self
     }
 
     #[must_use]
-    pub fn playback_duration(mut self, secs: f64) -> Self {
-        self.playback_duration = Some(secs);
+    pub fn playback_duration(mut self, seconds: f64) -> Self {
+        self.playback_duration = Some(seconds);
         self
     }
 
     #[must_use]
-    pub fn elapsed_playback_time(mut self, secs: f64) -> Self {
-        self.elapsed_playback_time = Some(secs);
+    pub fn elapsed_playback_time(mut self, seconds: f64) -> Self {
+        self.elapsed_playback_time = Some(seconds);
         self
     }
 
@@ -122,14 +370,92 @@ impl NowPlayingInfo {
     }
 
     #[must_use]
-    pub fn media_type(mut self, mt: NowPlayingMediaType) -> Self {
-        self.media_type = Some(mt);
+    pub fn default_playback_rate(mut self, rate: f64) -> Self {
+        self.default_playback_rate = Some(rate);
         self
     }
 
     #[must_use]
-    pub fn external_content_identifier(mut self, id: impl Into<String>) -> Self {
-        self.external_content_identifier = Some(id.into());
+    pub fn playback_queue_index(mut self, index: u64) -> Self {
+        self.playback_queue_index = Some(index);
+        self
+    }
+
+    #[must_use]
+    pub fn playback_queue_count(mut self, count: u64) -> Self {
+        self.playback_queue_count = Some(count);
+        self
+    }
+
+    #[must_use]
+    pub fn chapter_number(mut self, number: u64) -> Self {
+        self.chapter_number = Some(number);
+        self
+    }
+
+    #[must_use]
+    pub fn chapter_count(mut self, count: u64) -> Self {
+        self.chapter_count = Some(count);
+        self
+    }
+
+    #[must_use]
+    pub fn live_stream(mut self, is_live_stream: bool) -> Self {
+        self.is_live_stream = Some(is_live_stream);
+        self
+    }
+
+    #[must_use]
+    pub fn available_language_option_groups<I>(mut self, groups: I) -> Self
+    where
+        I: IntoIterator<Item = LanguageOptionGroup>,
+    {
+        self.available_language_option_groups = groups.into_iter().collect();
+        self
+    }
+
+    #[must_use]
+    pub fn current_language_options<I>(mut self, options: I) -> Self
+    where
+        I: IntoIterator<Item = LanguageOption>,
+    {
+        self.current_language_options = options.into_iter().collect();
+        self
+    }
+
+    #[must_use]
+    pub fn collection_identifier(mut self, identifier: impl Into<String>) -> Self {
+        self.collection_identifier = Some(identifier.into());
+        self
+    }
+
+    #[must_use]
+    pub fn external_content_identifier(mut self, identifier: impl Into<String>) -> Self {
+        self.external_content_identifier = Some(identifier.into());
+        self
+    }
+
+    #[must_use]
+    pub fn external_user_profile_identifier(mut self, identifier: impl Into<String>) -> Self {
+        self.external_user_profile_identifier = Some(identifier.into());
+        self
+    }
+
+    #[must_use]
+    pub fn service_identifier(mut self, identifier: impl Into<String>) -> Self {
+        self.service_identifier = Some(identifier.into());
+        self
+    }
+
+    #[must_use]
+    pub fn playback_progress(mut self, progress: f64) -> Self {
+        self.playback_progress = Some(progress);
+        self
+    }
+
+    #[must_use]
+    pub fn media_type(mut self, media_type: NowPlayingMediaType) -> Self {
+        self.media_type = Some(media_type);
         self
     }
 
@@ -138,71 +464,192 @@ impl NowPlayingInfo {
         self.asset_url = Some(url.into());
         self
     }
+
+    #[must_use]
+    pub fn current_playback_date(mut self, date: SystemTime) -> Self {
+        self.current_playback_date = Some(date);
+        self
+    }
+
+    #[must_use]
+    pub fn credits_start_time(mut self, seconds: f64) -> Self {
+        self.credits_start_time = Some(seconds);
+        self
+    }
+
+    #[must_use]
+    pub fn international_standard_recording_code(mut self, code: impl Into<String>) -> Self {
+        self.international_standard_recording_code = Some(code.into());
+        self
+    }
+
+    #[must_use]
+    pub fn exclude_from_suggestions(mut self, exclude: bool) -> Self {
+        self.exclude_from_suggestions = Some(exclude);
+        self
+    }
 }
 
-// ── NowPlayingInfoCenter ──────────────────────────────────────────────────────
-
-/// Safe wrapper around `MPNowPlayingInfoCenter.default()`.
-///
-/// Clears `nowPlayingInfo` on [`Drop`] to avoid leaving stale system state.
 #[derive(Debug)]
+/// Safe wrapper around `MPNowPlayingInfoCenter.default()`.
 pub struct NowPlayingInfoCenter {
     _private: (),
 }
 
 impl NowPlayingInfoCenter {
-    /// Obtain a handle to the default now-playing center.
     #[must_use]
     pub fn default_center() -> Self {
         Self { _private: () }
     }
 
-    /// Push `info` to the system without artwork.
     pub fn set_now_playing_info(&self, info: &NowPlayingInfo) {
         self.set_now_playing_info_with_artwork(info, None);
     }
 
-    /// Push `info` to the system, optionally attaching album artwork.
+    #[allow(clippy::too_many_lines)]
     pub fn set_now_playing_info_with_artwork(&self, info: &NowPlayingInfo, artwork: Option<&Artwork>) {
-        let mk = |s: &str| CString::new(s).unwrap_or_default();
+        let info_box = unsafe { ffi::mp_now_playing_info_box_new() };
+        if info_box.is_null() {
+            return;
+        }
 
-        let title = info.title.as_deref().map(mk);
-        let artist = info.artist.as_deref().map(mk);
-        let album = info.album_title.as_deref().map(mk);
-        let content_id = info.external_content_identifier.as_deref().map(mk);
-        let asset_url = info.asset_url.as_deref().map(mk);
+        let mk = |value: &str| CString::new(value).unwrap_or_default();
 
         unsafe {
-            ffi::mp_now_playing_set_info(
-                title.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
-                artist.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
-                album.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
-                info.playback_duration.unwrap_or(-1.0),
-                info.elapsed_playback_time.unwrap_or(-1.0),
-                info.playback_rate.unwrap_or(-1.0),
-                info.media_type.map_or(-1, |m| m as i32),
-                content_id.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
-                asset_url.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
-                artwork.map_or(ptr::null_mut(), |a| a.ptr),
-            );
+            if let Some(value) = info.title.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::Title as i32, value.as_ptr());
+            }
+            if let Some(value) = info.artist.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::Artist as i32, value.as_ptr());
+            }
+            if let Some(value) = info.album_title.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::AlbumTitle as i32, value.as_ptr());
+            }
+            if let Some(value) = info.playback_duration {
+                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::PlaybackDuration as i32, value);
+            }
+            if let Some(value) = info.elapsed_playback_time {
+                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::ElapsedPlaybackTime as i32, value);
+            }
+            if let Some(value) = info.playback_rate {
+                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::PlaybackRate as i32, value);
+            }
+            if let Some(value) = info.default_playback_rate {
+                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::DefaultPlaybackRate as i32, value);
+            }
+            if let Some(value) = info.playback_queue_index {
+                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::PlaybackQueueIndex as i32, value);
+            }
+            if let Some(value) = info.playback_queue_count {
+                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::PlaybackQueueCount as i32, value);
+            }
+            if let Some(value) = info.chapter_number {
+                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::ChapterNumber as i32, value);
+            }
+            if let Some(value) = info.chapter_count {
+                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::ChapterCount as i32, value);
+            }
+            if let Some(value) = info.is_live_stream {
+                ffi::mp_now_playing_info_box_set_bool(info_box, NowPlayingKey::IsLiveStream as i32, i32::from(value));
+            }
+            if let Some(value) = info.collection_identifier.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::CollectionIdentifier as i32, value.as_ptr());
+            }
+            if let Some(value) = info.external_content_identifier.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::ExternalContentIdentifier as i32, value.as_ptr());
+            }
+            if let Some(value) = info.external_user_profile_identifier.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::ExternalUserProfileIdentifier as i32, value.as_ptr());
+            }
+            if let Some(value) = info.service_identifier.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::ServiceIdentifier as i32, value.as_ptr());
+            }
+            if let Some(value) = info.playback_progress {
+                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::PlaybackProgress as i32, value);
+            }
+            if let Some(value) = info.media_type {
+                ffi::mp_now_playing_info_box_set_u64(info_box, NowPlayingKey::MediaType as i32, value as u64);
+            }
+            if let Some(value) = info.asset_url.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_url(info_box, NowPlayingKey::AssetURL as i32, value.as_ptr());
+            }
+            if let Some(value) = info.current_playback_date {
+                ffi::mp_now_playing_info_box_set_date_seconds(
+                    info_box,
+                    NowPlayingKey::CurrentPlaybackDate as i32,
+                    system_time_to_unix_seconds(value),
+                );
+            }
+            if let Some(value) = info.credits_start_time {
+                ffi::mp_now_playing_info_box_set_double(info_box, NowPlayingKey::CreditsStartTime as i32, value);
+            }
+            if let Some(value) = info.international_standard_recording_code.as_deref() {
+                let value = mk(value);
+                ffi::mp_now_playing_info_box_set_string(info_box, NowPlayingKey::InternationalStandardRecordingCode as i32, value.as_ptr());
+            }
+            if let Some(value) = info.exclude_from_suggestions {
+                ffi::mp_now_playing_info_box_set_bool(
+                    info_box,
+                    NowPlayingKey::ExcludeFromSuggestions as i32,
+                    i32::from(value),
+                );
+            }
+            if let Some(artwork) = artwork {
+                ffi::mp_now_playing_info_box_set_artwork(info_box, artwork.ptr);
+            }
+            if !info.available_language_option_groups.is_empty() {
+                let group_ptrs = info
+                    .available_language_option_groups
+                    .iter()
+                    .map(|group| group.ptr)
+                    .collect::<Vec<_>>();
+                ffi::mp_now_playing_info_box_set_available_language_option_groups(
+                    info_box,
+                    group_ptrs.as_ptr(),
+                    group_ptrs.len(),
+                );
+            }
+            if !info.current_language_options.is_empty() {
+                let option_ptrs = info
+                    .current_language_options
+                    .iter()
+                    .map(|option| option.ptr)
+                    .collect::<Vec<_>>();
+                ffi::mp_now_playing_info_box_set_current_language_options(
+                    info_box,
+                    option_ptrs.as_ptr(),
+                    option_ptrs.len(),
+                );
+            }
+            ffi::mp_now_playing_apply_info_box(info_box);
+            ffi::mp_now_playing_info_box_release(info_box);
         }
     }
 
-    /// Set `nowPlayingInfo = nil` immediately, clearing all system UI.
     pub fn clear(&self) {
         unsafe { ffi::mp_now_playing_clear() }
     }
 
-    /// Update the playback state reported to the system.
     pub fn set_playback_state(&self, state: PlaybackState) {
         unsafe { ffi::mp_now_playing_set_playback_state(state as i32) }
     }
 
-    /// Read back the current playback state.
     #[must_use]
     pub fn playback_state(&self) -> PlaybackState {
-        let raw = unsafe { ffi::mp_now_playing_get_playback_state() };
-        PlaybackState::from_raw(raw)
+        PlaybackState::from_raw(unsafe { ffi::mp_now_playing_get_playback_state() })
+    }
+
+    #[must_use]
+    pub fn supported_animated_artwork_keys(&self) -> Vec<String> {
+        copy_lines(unsafe { ffi::mp_now_playing_copy_supported_animated_artwork_keys() })
     }
 }
 
@@ -210,4 +657,47 @@ impl Drop for NowPlayingInfoCenter {
     fn drop(&mut self) {
         unsafe { ffi::mp_now_playing_clear() }
     }
+}
+
+#[repr(i32)]
+enum NowPlayingKey {
+    Title = 0,
+    Artist = 1,
+    AlbumTitle = 2,
+    PlaybackDuration = 3,
+    ElapsedPlaybackTime = 4,
+    PlaybackRate = 5,
+    DefaultPlaybackRate = 6,
+    PlaybackQueueIndex = 7,
+    PlaybackQueueCount = 8,
+    ChapterNumber = 9,
+    ChapterCount = 10,
+    IsLiveStream = 11,
+    CollectionIdentifier = 12,
+    ExternalContentIdentifier = 13,
+    ExternalUserProfileIdentifier = 14,
+    ServiceIdentifier = 15,
+    PlaybackProgress = 16,
+    MediaType = 17,
+    AssetURL = 18,
+    CurrentPlaybackDate = 19,
+    CreditsStartTime = 20,
+    InternationalStandardRecordingCode = 21,
+    ExcludeFromSuggestions = 22,
+}
+
+fn copy_lines(ptr: *mut core::ffi::c_char) -> Vec<String> {
+    unsafe { unsupported::take_string(ptr) }
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn system_time_to_unix_seconds(value: SystemTime) -> f64 {
+    value
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_secs_f64()
 }

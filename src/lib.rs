@@ -11,23 +11,62 @@ pub mod artwork;
 pub mod constants;
 pub mod error;
 pub mod ffi;
+pub mod media_item;
+pub mod media_item_collection;
+pub mod media_library;
+pub mod media_playlist;
+pub mod media_query;
+pub mod music_player;
 pub mod now_playing;
+pub mod playable_content_data_source;
 pub mod remote_commands;
+pub mod system_music_player;
+pub mod volume_view;
+
+mod unsupported;
 
 pub use artwork::Artwork;
-pub use error::MediaPlayerError;
-pub use now_playing::{NowPlayingInfo, NowPlayingInfoCenter, NowPlayingMediaType, PlaybackState};
-pub use remote_commands::{
-    Command, CommandEvent, CommandToken, HandlerStatus, RemoteCommandCenter, SeekType,
+pub use error::{ErrorCode, MediaPlayerError, ERROR_DOMAIN};
+pub use media_item::MediaItem;
+pub use media_item_collection::MediaItemCollection;
+pub use media_library::MediaLibrary;
+pub use media_playlist::MediaPlaylist;
+pub use media_query::MediaQuery;
+pub use music_player::MusicPlayer;
+pub use now_playing::{
+    LanguageOption, LanguageOptionGroup, LanguageOptionType, NowPlayingInfo,
+    NowPlayingInfoCenter, NowPlayingMediaType, PlaybackState,
 };
+pub use playable_content_data_source::PlayableContentDataSource;
+pub use remote_commands::{
+    ChangePlaybackPositionCommand, ChangePlaybackRateCommand, ChangeRepeatModeCommand,
+    ChangeShuffleModeCommand, Command, CommandEvent, CommandToken, FeedbackCommand,
+    HandlerStatus, LanguageOptionSetting, RatingCommand, RemoteCommand,
+    RemoteCommandCenter, RepeatType, SeekType, ShuffleType, SkipIntervalCommand,
+};
+pub use system_music_player::SystemMusicPlayer;
+pub use volume_view::VolumeView;
 
 pub mod prelude {
     pub use crate::artwork::Artwork;
-    pub use crate::error::MediaPlayerError;
+    pub use crate::error::{ErrorCode, MediaPlayerError, ERROR_DOMAIN};
+    pub use crate::media_item::MediaItem;
+    pub use crate::media_item_collection::MediaItemCollection;
+    pub use crate::media_library::MediaLibrary;
+    pub use crate::media_playlist::MediaPlaylist;
+    pub use crate::media_query::MediaQuery;
+    pub use crate::music_player::MusicPlayer;
     pub use crate::now_playing::{
-        NowPlayingInfo, NowPlayingInfoCenter, NowPlayingMediaType, PlaybackState,
+        LanguageOption, LanguageOptionGroup, LanguageOptionType, NowPlayingInfo,
+        NowPlayingInfoCenter, NowPlayingMediaType, PlaybackState,
     };
+    pub use crate::playable_content_data_source::PlayableContentDataSource;
     pub use crate::remote_commands::{
-        Command, CommandEvent, CommandToken, HandlerStatus, RemoteCommandCenter, SeekType,
+        ChangePlaybackPositionCommand, ChangePlaybackRateCommand, ChangeRepeatModeCommand,
+        ChangeShuffleModeCommand, Command, CommandEvent, CommandToken, FeedbackCommand,
+        HandlerStatus, LanguageOptionSetting, RatingCommand, RemoteCommand,
+        RemoteCommandCenter, RepeatType, SeekType, ShuffleType, SkipIntervalCommand,
     };
+    pub use crate::system_music_player::SystemMusicPlayer;
+    pub use crate::volume_view::VolumeView;
 }

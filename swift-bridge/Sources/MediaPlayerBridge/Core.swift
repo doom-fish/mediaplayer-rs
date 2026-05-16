@@ -1,7 +1,5 @@
 import Foundation
 
-// MARK: - String helper
-
 @_cdecl("mp_string_free")
 public func mp_string_free(_ string: UnsafeMutablePointer<CChar>?) {
     guard let string else { return }
@@ -12,8 +10,6 @@ public func mp_string_free(_ string: UnsafeMutablePointer<CChar>?) {
 func mpCString(_ string: String) -> UnsafeMutablePointer<CChar>? {
     string.withCString { strdup($0) }
 }
-
-// MARK: - Retain / release / borrow (Unmanaged pattern)
 
 @inline(__always)
 func mpRetain(_ object: some AnyObject) -> UnsafeMutableRawPointer {
@@ -28,4 +24,11 @@ func mpBorrow<T: AnyObject>(_ ptr: UnsafeMutableRawPointer, as _: T.Type = T.sel
 @inline(__always)
 func mpRelease(_ ptr: UnsafeMutableRawPointer) {
     Unmanaged<AnyObject>.fromOpaque(ptr).release()
+}
+
+@_cdecl("mp_object_retain")
+public func mp_object_retain(_ ptr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
+    guard let ptr else { return nil }
+    let object = Unmanaged<AnyObject>.fromOpaque(ptr).takeUnretainedValue()
+    return mpRetain(object)
 }
