@@ -143,6 +143,12 @@ final class MPRemoteCommandStreamBridge: NSObject {
         self.ctx = ctx
         super.init()
     }
+
+    deinit {
+        if let token = handlerToken {
+            command.removeTarget(token)
+        }
+    }
 }
 
 private func mpRemoteCommandForStream(_ id: Int32) -> MPRemoteCommand? {

@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.1] - 2026-05-28
+
+### Fixed
+
+- **Sender-pointer leak in all async stream subscriptions** (`subscribe_notification`,
+  `RemoteCommandStream::subscribe`, `NowPlayingSessionStream::subscribe`): the
+  `Box<AsyncStreamSender<T>>` was leaked via `Box::into_raw` into the Swift bridge
+  `ctx` pointer but never reconstituted. `SubscriptionHandle` now stores the sender
+  pointer and a type-erased `free_sender` destructor; `Drop` calls `free_sender` after
+  calling `unsubscribe` (removing the observer/target first so no callback can fire
+  against the freed pointer). This closes the `BoundedAsyncStream` correctly and
+  prevents `is_closed()` from permanently returning `false` after drop.
+- **Defensive `deinit` on `MPRemoteCommandStreamBridge`** (Swift): added a `deinit`
+  that calls `command.removeTarget(handlerToken)` so the handler is removed even if
+  the bridge is released without going through `mp_stream_remote_command_unsubscribe`.
+- **`SAFETY:` comments** added to every `unsafe {}` block in `src/async_api.rs`
+  (callbacks, FFI call sites, `Box::from_raw` uses, and `SubscriptionHandle::drop`).
+- **`doom-fish-utils` version constraint** widened from `"0.1"` to `">=0.1, <0.3"` per
+  workspace versioning policy.
+
 ## [0.3.0] - 2026-05-27
 
 ### Added
