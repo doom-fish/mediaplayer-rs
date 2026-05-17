@@ -2,7 +2,38 @@
 
 Safe Rust bindings for Apple's `MediaPlayer.framework` on macOS.
 
-> **Status:** v0.2.0 covers the macOS-available now-playing, remote-command, language-option, and artwork APIs, and exposes explicit macOS-unavailable wrappers for the iOS-only `MPMediaLibrary`, `MPMediaQuery`, `MPMusicPlayer`, `MPMediaItem`, `MPMediaItemCollection`, `MPMediaPlaylist`, `MPVolumeView`, `MPSystemMusicPlayer`, and `MPPlayableContentDataSource` areas.
+> **Status:** v0.3.0 adds a Tier-2 async stream module (`async` feature) wrapping six notification / delegate / command-target surfaces as executor-agnostic `BoundedAsyncStream<T>` event streams.  v0.2.0 covers the macOS-available now-playing, remote-command, language-option, and artwork APIs, and exposes explicit macOS-unavailable wrappers for the iOS-only `MPMediaLibrary`, `MPMediaQuery`, `MPMusicPlayer`, `MPMediaItem`, `MPMediaItemCollection`, `MPMediaPlaylist`, `MPVolumeView`, `MPSystemMusicPlayer`, and `MPPlayableContentDataSource` areas.
+
+## Async streams (`async` feature)
+
+Enable with `features = ["async"]`:
+
+```toml
+mediaplayer = { version = "0.3", features = ["async"] }
+```
+
+| Stream type | Apple surface |
+|---|---|
+| `NowPlayingItemChangeStream` | `MPMusicPlayerControllerNowPlayingItemDidChangeNotification` |
+| `PlaybackStateChangeStream` | `MPMusicPlayerControllerPlaybackStateDidChangeNotification` |
+| `VolumeChangeStream` | `MPMusicPlayerControllerVolumeDidChangeNotification` |
+| `MediaLibraryChangeStream` | `MPMediaLibraryDidChangeNotification` |
+| `RemoteCommandStream` | `MPRemoteCommandCenter` command targets (20 commands) |
+| `NowPlayingSessionStream` | `MPNowPlayingSession` delegate (stub; unavailable on macOS) |
+
+```rust,no_run
+# #[cfg(feature = "async")]
+# async fn run() {
+use mediaplayer::async_api::RemoteCommandStream;
+use mediaplayer::remote_commands::Command;
+
+let stream = RemoteCommandStream::subscribe(Command::Play, 16);
+while let Some(event) = stream.next().await {
+    println!("play at t={:.3}", event.timestamp);
+}
+# }
+```
+
 
 ## Quick start
 

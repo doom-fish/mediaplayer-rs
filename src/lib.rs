@@ -24,6 +24,10 @@ pub mod remote_commands;
 pub mod system_music_player;
 pub mod volume_view;
 
+#[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+pub mod async_api;
+
 mod unsupported;
 
 pub use artwork::{AnimatedArtwork, Artwork};

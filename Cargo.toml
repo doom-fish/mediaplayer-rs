@@ -1,6 +1,6 @@
 [package]
 name = "mediaplayer"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/doom-fish/mediaplayer-rs"
@@ -35,9 +35,17 @@ cargo = { level = "warn", priority = -1 }
 name = "mediaplayer"
 crate-type = ["lib"]
 
+[features]
+default = []
+async = ["dep:doom-fish-utils"]
+
 [dependencies]
 apple-cf = { version = ">=0.2, <0.6", features = ["cg"] }
 libc = "0.2"
+doom-fish-utils = { path = "../doom-fish-utils", version = "0.1", optional = true }
+
+[dev-dependencies]
+pollster = "0.3"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -50,6 +58,10 @@ maintenance = { status = "actively-developed" }
 
 [[example]]
 name = "01_now_playing_smoke"
+
+[[example]]
+name = "14_async_streams"
+required-features = ["async"]
 
 [profile.release]
 debug = "full"

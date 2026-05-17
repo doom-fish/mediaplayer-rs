@@ -38,7 +38,7 @@ pub enum Command {
 
 impl Command {
     #[must_use]
-    fn from_id(id: i32) -> Option<Self> {
+    pub(crate) fn from_id(id: i32) -> Option<Self> {
         match id {
             0 => Some(Self::Play),
             1 => Some(Self::Pause),
@@ -89,7 +89,7 @@ pub enum SeekType {
 
 impl SeekType {
     #[must_use]
-    fn from_raw(raw: i32) -> Self {
+    pub(crate) fn from_raw(raw: i32) -> Self {
         if raw == 1 {
             Self::EndSeeking
         } else {
@@ -110,7 +110,7 @@ pub enum ShuffleType {
 
 impl ShuffleType {
     #[must_use]
-    fn from_raw(raw: i32) -> Self {
+    pub(crate) fn from_raw(raw: i32) -> Self {
         match raw {
             1 => Self::Items,
             2 => Self::Collections,
@@ -131,7 +131,7 @@ pub enum RepeatType {
 
 impl RepeatType {
     #[must_use]
-    fn from_raw(raw: i32) -> Self {
+    pub(crate) fn from_raw(raw: i32) -> Self {
         match raw {
             1 => Self::One,
             2 => Self::All,
@@ -152,7 +152,7 @@ pub enum LanguageOptionSetting {
 
 impl LanguageOptionSetting {
     #[must_use]
-    fn from_raw(raw: i32) -> Self {
+    pub(crate) fn from_raw(raw: i32) -> Self {
         match raw {
             1 => Self::NowPlayingItemOnly,
             2 => Self::Permanent,

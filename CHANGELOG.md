@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.0] - 2026-05-27
+
+### Added
+
+- **`async` Cargo feature** — new `src/async_api.rs` module exposing six
+  executor-agnostic `BoundedAsyncStream<T>`-backed event streams:
+  - `NowPlayingItemChangeStream` — wraps `MPMusicPlayerControllerNowPlayingItemDidChangeNotification`
+  - `PlaybackStateChangeStream` — wraps `MPMusicPlayerControllerPlaybackStateDidChangeNotification`
+  - `VolumeChangeStream` — wraps `MPMusicPlayerControllerVolumeDidChangeNotification`
+  - `MediaLibraryChangeStream` — wraps `MPMediaLibraryDidChangeNotification`
+  - `RemoteCommandStream` — wraps `MPRemoteCommandCenter` command targets (all 20 commands);
+    each event auto-acknowledges with `.success`
+  - `NowPlayingSessionStream` — `MPNowPlayingSession` delegate stub (API-unavailable on macOS;
+    stream is open but idle)
+- Swift bridge file `AsyncStream.swift` with `mp_notification_subscribe/unsubscribe`,
+  `mp_stream_remote_command_subscribe/unsubscribe`, and
+  `mp_now_playing_session_stream_subscribe/unsubscribe` C-cdecl entry points.
+- `src/ffi/async_stream.rs` with Rust `extern "C"` declarations for the new bridge functions.
+- `examples/14_async_streams.rs` — smoke test for all six streams (exits 0 on headless macOS).
+- `tests/async_stream_tests.rs` — 15 tests covering subscribe → try\_next → drop for each stream type.
+- `doom-fish-utils` path-dependency (feature-gated behind `async`) providing the
+  `BoundedAsyncStream<T>` / `AsyncStreamSender<T>` primitives.
+- `pollster` dev-dependency for executor-agnostic example test patterns.
+
 ## [0.2.1] - 2026-05-16
 
 ### Added

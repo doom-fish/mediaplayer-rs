@@ -1,5 +1,6 @@
 #![allow(missing_docs, non_camel_case_types)]
 
+mod async_stream;
 mod artwork;
 mod content_item;
 mod core;
@@ -15,6 +16,7 @@ mod remote_commands;
 mod system_music_player;
 mod volume_view;
 
+pub use async_stream::*;
 pub use artwork::*;
 pub use content_item::*;
 pub use core::*;
