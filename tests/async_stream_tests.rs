@@ -125,9 +125,11 @@ fn remote_command_stream_capacity_is_honored() {
 
 #[test]
 fn now_playing_session_event_kind_debug() {
-    let k = NowPlayingSessionEventKind::ActiveMediaPlaybackTargetChanged;
+    let active = NowPlayingSessionEventKind::DidChangeActive;
+    let can_become_active = NowPlayingSessionEventKind::DidChangeCanBecomeActive;
+    assert_eq!(format!("{active:?}"), "DidChangeActive");
     assert_eq!(
-        format!("{k:?}"),
-        "ActiveMediaPlaybackTargetChanged"
+        format!("{can_become_active:?}"),
+        "DidChangeCanBecomeActive"
     );
 }

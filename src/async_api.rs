@@ -14,7 +14,7 @@
 //! | [`VolumeChangeStream`] | `MPMusicPlayerControllerVolumeDidChangeNotification` |
 //! | [`MediaLibraryChangeStream`] | `MPMediaLibraryDidChangeNotification` |
 //! | [`RemoteCommandStream`] | `MPRemoteCommandCenter` command targets |
-//! | [`NowPlayingSessionStream`] | `MPNowPlayingSession` delegate (stub — unavailable on macOS) |
+//! | [`NowPlayingSessionStream`] | `MPNowPlayingSessionDelegate` events (stub — unavailable on macOS) |
 //!
 //! ## Capacity and back-pressure
 //!
@@ -544,8 +544,10 @@ impl RemoteCommandStream {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum NowPlayingSessionEventKind {
-    /// The active media playback target changed.
-    ActiveMediaPlaybackTargetChanged,
+    /// The session changed whether it is the active now-playing session.
+    DidChangeActive,
+    /// The session changed whether it can become the active now-playing session.
+    DidChangeCanBecomeActive,
 }
 
 /// Event delivered by [`NowPlayingSessionStream`].
@@ -565,19 +567,23 @@ unsafe extern "C" fn now_playing_session_cb(
     // mp_now_playing_session_stream_unsubscribe tears down the session.
     let sender = unsafe { &*ctx.cast::<AsyncStreamSender<NowPlayingSessionEvent>>() };
     let event_kind = match kind {
-        0 => NowPlayingSessionEventKind::ActiveMediaPlaybackTargetChanged,
+        0 => NowPlayingSessionEventKind::DidChangeActive,
+        1 => NowPlayingSessionEventKind::DidChangeCanBecomeActive,
         _ => return,
     };
     sender.push(NowPlayingSessionEvent { kind: event_kind });
 }
 
-/// Async stream of [`NowPlayingSessionEvent`]s from `MPNowPlayingSession`.
+/// Async stream of [`NowPlayingSessionEvent`]s from `MPNowPlayingSessionDelegate`.
+///
+/// The event enum mirrors `nowPlayingSessionDidChangeActive(_:)` and
+/// `nowPlayingSessionDidChangeCanBecomeActive(_:)`.
 ///
 /// `MPNowPlayingSession` is iOS 16.0+ / tvOS 14.0+ only and is explicitly
-/// unavailable on macOS.  The Swift bridge always returns `nil` for the
-/// subscription handle on macOS, so the stream will be open but never deliver
-/// events.  This type is provided for API completeness so code that targets
-/// multiple platforms compiles without `#[cfg]` guards.
+/// unavailable on macOS. The Swift bridge therefore returns `nil` for the
+/// subscription handle on macOS, so the stream is open but idle. This type is
+/// provided for API completeness so code that targets multiple platforms
+/// compiles without `#[cfg]` guards.
 pub struct NowPlayingSessionStream {
     inner: BoundedAsyncStream<NowPlayingSessionEvent>,
     _handle: SubscriptionHandle,

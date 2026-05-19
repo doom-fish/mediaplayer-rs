@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0] - 2026-05-19
+
+### Added
+
+- Completed the `MPNowPlayingSessionDelegate` event enum in `async_api` with explicit `DidChangeActive` and `DidChangeCanBecomeActive` cases for cross-platform callers.
+- Documented the deprecated `MPMovie*` / `MPTimedMetadata` area and the iOS-only `MPMediaPickerControllerDelegate` surface as explicit audit exemptions.
+
 ## [0.3.3] - 2026-05-18
 
 - Widen apple-cf version bound to `<0.10` so 0.9.x resolves.

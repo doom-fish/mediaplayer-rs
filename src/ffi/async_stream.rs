@@ -34,7 +34,10 @@ extern "C" {
     /// Cancels a remote-command stream subscription.
     pub fn mp_stream_remote_command_unsubscribe(handle: *mut c_void);
 
-    /// Creates an `MPNowPlayingSession` (macOS only) and streams delegate events.
+    /// Subscribes to `MPNowPlayingSessionDelegate` events.
+    ///
+    /// The bundled Swift bridge returns `NULL` on macOS because
+    /// `MPNowPlayingSession` is unavailable there.
     pub fn mp_now_playing_session_stream_subscribe(
         callback: Option<StreamEventCallback>,
         ctx: *mut c_void,

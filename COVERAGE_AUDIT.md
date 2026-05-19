@@ -8,6 +8,7 @@ COVERAGE_PCT: 100.00%
 
 - Counted top-level public declarations only (interfaces/categories/protocols, typedefs/enums, exported constants/functions), per the audit instructions.
 - Exported constants that remain macOS-available were kept in scope even when their owning class/protocol is macOS-unavailable; this notably affects `MPMediaItemProperty*`, `MPMediaPlaylistProperty*`, and `MPMediaPlaybackIsPreparedToPlayDidChangeNotification`.
+- Additional unavailable/deprecated cross-SDK symbols requested for explicit tracking are listed below and are excluded from the macOS coverage denominator above.
 
 ## 🟢 VERIFIED
 | Symbol | Kind | Header | Wrapped by |
@@ -140,3 +141,22 @@ None.
 | Symbol | Kind | Header | Reason | SDK attribute |
 | --- | --- | --- | --- | --- |
 | `MPNowPlayingInfoPropertyAdTimeRanges` | constant | `MPNowPlayingInfoCenter.h` | The key is public on macOS, but its required value type MPAdTimeRange is explicitly unavailable on macOS, so safe Rust cannot construct the payload. | MPNowPlayingInfoPropertyAdTimeRanges MP_API(..., macos(13.0)); MPAdTimeRange MP_UNAVAILABLE(watchos, macos) in MPNowPlayingSession.h |
+
+### Explicit additional symbols (excluded from counts)
+
+#### VERIFIED
+| Symbol | Kind | Header | Wrapped by |
+| --- | --- | --- | --- |
+| `MPNowPlayingSessionDelegate` | protocol | `MPNowPlayingSession.h` | `async_api::NowPlayingSessionEventKind::{DidChangeActive, DidChangeCanBecomeActive}`; `NowPlayingSessionStream` |
+
+#### EXEMPT
+| Symbol | Kind | Header | Reason | SDK attribute |
+| --- | --- | --- | --- | --- |
+| `MPMoviePlayerController` | class | `MPMoviePlayerController.h` | Deprecated; superseded by AVPlayer family | Deprecated by Apple |
+| `MPMoviePlayerViewController` | class | `MPMoviePlayerViewController.h` | Deprecated; superseded by AVPlayer family | Deprecated by Apple |
+| `MPMovieAccessLog` | class | `MPMoviePlayerController.h` | Deprecated; superseded by AVPlayer family | Deprecated by Apple |
+| `MPMovieAccessLogEvent` | class | `MPMoviePlayerController.h` | Deprecated; superseded by AVPlayer family | Deprecated by Apple |
+| `MPMovieErrorLog` | class | `MPMoviePlayerController.h` | Deprecated; superseded by AVPlayer family | Deprecated by Apple |
+| `MPMovieErrorLogEvent` | class | `MPMoviePlayerController.h` | Deprecated; superseded by AVPlayer family | Deprecated by Apple |
+| `MPTimedMetadata` | class | `MPMoviePlayerController.h` | Deprecated; superseded by AVPlayer family | Deprecated by Apple |
+| `MPMediaPickerControllerDelegate` | protocol | `MPMediaPickerController.h` | iOS-only surface (`MP_UNAVAILABLE(tvos, macos)`); intentionally documented rather than stubbed on macOS. | `MP_UNAVAILABLE(tvos, macos)` |

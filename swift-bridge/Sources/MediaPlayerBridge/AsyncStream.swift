@@ -249,12 +249,14 @@ public func mp_stream_remote_command_unsubscribe(_ handle: UnsafeMutableRawPoint
 // MARK: - MPNowPlayingSession delegate stream  (macOS only)
 //
 // Event kind discriminants (must match NowPlayingSessionEventKind in Rust):
-//   0 = ActiveMediaPlaybackTargetChanged
+//   0 = DidChangeActive
+//   1 = DidChangeCanBecomeActive
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - MPNowPlayingSession delegate stream
 //
+// MPNowPlayingSessionDelegate maps to two callbacks on iOS/tvOS, but
 // MPNowPlayingSession is only available on iOS 16.0+ and tvOS 14.0+; it is
 // explicitly marked unavailable on macOS.  The subscribe function always
 // returns nil so the Rust side creates an immediately-closed stream.
