@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.1] - 2026-05-20
+
+- Widen `doom-fish-utils` dependency bound to `<0.4` so the 0.3.x SPSC-ring release resolves cleanly. No source changes.
+
 ## [0.4.0] - 2026-05-19
 
 ### Added
