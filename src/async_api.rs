@@ -42,6 +42,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use core::ffi::c_void;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use doom_fish_utils::stream::{AsyncStreamSender, BoundedAsyncStream};
 
 use crate::ffi::{self, StreamEventCallback};
@@ -53,51 +54,140 @@ use crate::remote_commands::{
 // MARK: RAII subscription handle
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: Reference-counted stream context
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Reference-counted, type-erased owner of an `AsyncStreamSender<T>`.
+///
+/// The `ctx` pointer handed to the Swift bridge is a `*mut StreamContext`, not
+/// the bare sender. Both sides hold a reference:
+///
+/// * Rust takes the initial +1 at subscribe time (held by [`SubscriptionHandle`]).
+/// * The Swift bridge object takes a +1 in its `init` (via [`context_retain_cb`])
+///   and drops it in `deinit` (via [`context_release_cb`]).
+///
+/// A notification block dispatched on the main queue keeps the Swift bridge
+/// object alive for the duration of the callback (it captures `[weak bridge]`
+/// and re-strengthens it before touching `ctx`). Because the bridge object
+/// holds a reference on the `StreamContext`, the underlying sender cannot be
+/// freed mid-callback. A bare synchronous `removeObserver`/`removeTarget` does
+/// **not** dequeue an already-scheduled block, so without this refcount the
+/// sender could be freed while such a block is still in flight — a
+/// use-after-free. The sender (and the `StreamContext`) are freed only once
+/// both sides have released their reference.
+struct StreamContext {
+    ref_count: AtomicUsize,
+    /// Leaked `Box<AsyncStreamSender<T>>` passed to Swift callbacks as the
+    /// payload destination. Read by the per-stream `*_cb` trampolines.
+    sender: *mut c_void,
+    /// Type-erased destructor for the sender box (varies per event type).
+    drop_sender: unsafe fn(*mut c_void),
+}
+
+impl StreamContext {
+    fn new(sender: *mut c_void, drop_sender: unsafe fn(*mut c_void)) -> *mut Self {
+        Box::into_raw(Box::new(Self {
+            ref_count: AtomicUsize::new(1),
+            sender,
+            drop_sender,
+        }))
+    }
+
+    /// Increment the reference count.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must point to a valid, live `StreamContext`.
+    unsafe fn retain(ptr: *mut Self) {
+        unsafe { &*ptr }.ref_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Decrement the reference count, freeing the context (and its sender) when
+    /// it reaches zero.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must point to a valid, live `StreamContext`, or be null.
+    unsafe fn release(ptr: *mut Self) {
+        if ptr.is_null() {
+            return;
+        }
+        let prev = unsafe { &*ptr }.ref_count.fetch_sub(1, Ordering::Release);
+        if prev == 1 {
+            // Acquire fence pairs with the Release stores above from every
+            // other thread that held a reference — the canonical Arc-style
+            // drop pattern. Removing it is unsound on weakly-ordered targets.
+            core::sync::atomic::fence(Ordering::Acquire);
+            let ctx = unsafe { Box::from_raw(ptr) };
+            // SAFETY: `sender` was created by `Box::into_raw(Box::new(sender))`
+            // at subscribe time; this is the last reference, so dropping it now
+            // closes the stream and wakes any pending consumer.
+            unsafe { (ctx.drop_sender)(ctx.sender) };
+        }
+    }
+}
+
+/// C trampoline handed to Swift so each bridge object can take a +1 on the
+/// `StreamContext` for the duration of its own lifetime.
+extern "C" fn context_retain_cb(context: *mut c_void) {
+    if !context.is_null() {
+        // SAFETY: Swift only ever passes back the `ctx` pointer we created via
+        // `StreamContext::new`, which is live until the final release.
+        unsafe { StreamContext::retain(context.cast::<StreamContext>()) };
+    }
+}
+
+/// C trampoline handed to Swift, invoked from each bridge object's `deinit` to
+/// drop the +1 taken in [`context_retain_cb`]. Null-checks internally.
+extern "C" fn context_release_cb(context: *mut c_void) {
+    // SAFETY: see `context_retain_cb`; `release` null-checks internally.
+    unsafe { StreamContext::release(context.cast::<StreamContext>()) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: RAII subscription handle
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// Opaque RAII guard for a subscription handle returned by the Swift bridge.
 ///
 /// On drop:
 /// 1. Calls the appropriate `_unsubscribe` Swift function, which removes the
-///    observer / handler target and releases the Swift bridge object.
-/// 2. Reconstitutes and drops the `Box<AsyncStreamSender<T>>` that was leaked
-///    into the Swift bridge as the `ctx` pointer, closing the stream.
-///
-/// Unsubscribe is always called **before** freeing the sender so that no new
-/// callback can fire against the deallocated pointer.
+///    observer / handler target and releases the Swift bridge object (whose
+///    `deinit` drops the bridge's reference on the [`StreamContext`]).
+/// 2. Releases Rust's own reference on the [`StreamContext`]. The context and
+///    its sender are freed only once both references are gone, so an in-flight
+///    callback can never observe a freed sender.
 struct SubscriptionHandle {
     ptr: *mut c_void,
-    /// Leaked `Box<AsyncStreamSender<T>>` that was passed to Swift as `ctx`.
-    /// Null only when the subscribe call returned a null handle (stream already
-    /// closed) — in that case the sender was freed at subscribe time.
-    sender: *mut c_void,
+    /// Reference-counted context owning the `Box<AsyncStreamSender<T>>`.
+    context: *mut StreamContext,
     unsubscribe: unsafe fn(*mut c_void),
-    /// Type-erased destructor for the sender box (varies per event type).
-    free_sender: unsafe fn(*mut c_void),
 }
 
 impl Drop for SubscriptionHandle {
     fn drop(&mut self) {
-        // Step 1: remove the Apple observer/target so no new callback can touch
-        // the sender pointer we are about to free.
+        // Step 1: remove the Apple observer/target and release the Swift bridge
+        // object. Any block already scheduled on the main queue keeps the
+        // bridge (and therefore the context) alive until it finishes.
         if !self.ptr.is_null() {
             // SAFETY: `self.ptr` is the opaque bridge handle created by the Swift
             // subscribe function.  We have sole ownership; it has not been freed.
             unsafe { (self.unsubscribe)(self.ptr) }
         }
-        // Step 2: drop the sender box — this marks the BoundedAsyncStream closed
-        // and wakes any pending consumer.
-        if !self.sender.is_null() {
-            // SAFETY: `self.sender` was created by `Box::into_raw(Box::new(sender))`
-            // in the subscribe function and ownership was transferred here.
-            // No callback can reach this pointer after step 1 returns because
-            // the observer/target was removed synchronously above.
-            unsafe { (self.free_sender)(self.sender) }
-        }
+        // Step 2: drop Rust's reference on the context. If the Swift bridge has
+        // already released (and no callback is in flight), this frees the sender
+        // and closes the stream.
+        // SAFETY: `self.context` was created by `StreamContext::new` at subscribe
+        // time and Rust's reference is dropped exactly once, here.
+        unsafe { StreamContext::release(self.context) };
     }
 }
 
 // SAFETY: The Swift bridge objects are thread-safe (NSNotificationCenter
 // dispatches on main queue; Objective-C ref-counting is thread-safe).
-// `AsyncStreamSender<T>` is Send + Sync (Arc<Mutex<...>> internals).
+// `AsyncStreamSender<T>` is Send + Sync (Arc<Mutex<...>> internals) and the
+// `StreamContext` refcount is atomic.
 unsafe impl Send for SubscriptionHandle {}
 unsafe impl Sync for SubscriptionHandle {}
 
@@ -148,11 +238,15 @@ pub struct NotificationEvent {
 
 /// `extern "C"` trampoline for all notification callbacks.
 unsafe extern "C" fn notification_cb(kind: i32, _payload: *const c_void, ctx: *mut c_void) {
-    // SAFETY: ctx is the sender_ptr created by Box::into_raw in subscribe_notification.
-    // The pointer is valid for the lifetime of the subscription; the callback is only
-    // invoked while the Swift bridge object is alive, which is before SubscriptionHandle
-    // calls free_notification_sender.
-    let sender = unsafe { &*ctx.cast::<AsyncStreamSender<NotificationEvent>>() };
+    // SAFETY: ctx is the StreamContext pointer created in subscribe_notification.
+    // It is kept alive by the Swift bridge object's reference for the duration of
+    // this callback (see StreamContext docs), so the sender it owns is valid here.
+    let context = unsafe { &*ctx.cast::<StreamContext>() };
+    let sender = unsafe {
+        &*context
+            .sender
+            .cast::<AsyncStreamSender<NotificationEvent>>()
+    };
     let notification_kind = match kind {
         0 => NotificationKind::NowPlayingItemDidChange,
         1 => NotificationKind::PlaybackStateDidChange,
@@ -160,7 +254,9 @@ unsafe extern "C" fn notification_cb(kind: i32, _payload: *const c_void, ctx: *m
         3 => NotificationKind::MediaLibraryDidChange,
         _ => return,
     };
-    sender.push(NotificationEvent { kind: notification_kind });
+    sender.push(NotificationEvent {
+        kind: notification_kind,
+    });
 }
 
 /// Subscribes to one notification kind and returns a stream + RAII handle.
@@ -169,29 +265,24 @@ fn subscribe_notification(
     capacity: usize,
 ) -> (BoundedAsyncStream<NotificationEvent>, SubscriptionHandle) {
     let (stream, sender) = BoundedAsyncStream::new(capacity);
-    let sender_ptr = Box::into_raw(Box::new(sender));
-    // SAFETY: callback is a valid extern "C" fn pointer; sender_ptr is a valid heap
-    // allocation just created above; Swift retains the returned handle until unsubscribe.
+    let sender_ptr = Box::into_raw(Box::new(sender)).cast::<c_void>();
+    let context = StreamContext::new(sender_ptr, free_notification_sender);
+    // SAFETY: callback is a valid extern "C" fn pointer; `context` is a valid heap
+    // allocation just created above; Swift retains the returned handle (and takes a
+    // reference on `context` via context_retain_cb) until unsubscribe.
     let handle_ptr = unsafe {
         ffi::mp_notification_subscribe(
             kind as i32,
             Some(notification_cb as StreamEventCallback),
-            sender_ptr.cast(),
+            context.cast(),
+            context_retain_cb,
+            context_release_cb,
         )
     };
-    // If Swift returned null (unknown kind), drop the sender to close the stream immediately.
-    if handle_ptr.is_null() {
-        // SAFETY: sender_ptr was created by Box::into_raw above; handle_ptr is null so
-        // SubscriptionHandle will not touch sender (set to null below).
-        unsafe { drop(Box::from_raw(sender_ptr)) };
-    }
     let handle = SubscriptionHandle {
         ptr: handle_ptr,
-        // When handle_ptr is null the sender was already freed above; pass null so
-        // SubscriptionHandle::drop does not attempt a double-free.
-        sender: if handle_ptr.is_null() { core::ptr::null_mut() } else { sender_ptr.cast() },
+        context,
         unsubscribe: |ptr| unsafe { ffi::mp_notification_unsubscribe(ptr) },
-        free_sender: free_notification_sender,
     };
     (stream, handle)
 }
@@ -215,7 +306,10 @@ impl NowPlayingItemChangeStream {
     pub fn subscribe(capacity: usize) -> Self {
         let (inner, handle) =
             subscribe_notification(NotificationKind::NowPlayingItemDidChange, capacity);
-        Self { inner, _handle: handle }
+        Self {
+            inner,
+            _handle: handle,
+        }
     }
 
     /// Await the next event.
@@ -262,7 +356,10 @@ impl PlaybackStateChangeStream {
     pub fn subscribe(capacity: usize) -> Self {
         let (inner, handle) =
             subscribe_notification(NotificationKind::PlaybackStateDidChange, capacity);
-        Self { inner, _handle: handle }
+        Self {
+            inner,
+            _handle: handle,
+        }
     }
 
     /// Await the next event.
@@ -307,9 +404,11 @@ impl VolumeChangeStream {
     /// Subscribe with an internal ring buffer of `capacity` slots.
     #[must_use]
     pub fn subscribe(capacity: usize) -> Self {
-        let (inner, handle) =
-            subscribe_notification(NotificationKind::VolumeDidChange, capacity);
-        Self { inner, _handle: handle }
+        let (inner, handle) = subscribe_notification(NotificationKind::VolumeDidChange, capacity);
+        Self {
+            inner,
+            _handle: handle,
+        }
     }
 
     /// Await the next event.
@@ -356,7 +455,10 @@ impl MediaLibraryChangeStream {
     pub fn subscribe(capacity: usize) -> Self {
         let (inner, handle) =
             subscribe_notification(NotificationKind::MediaLibraryDidChange, capacity);
-        Self { inner, _handle: handle }
+        Self {
+            inner,
+            _handle: handle,
+        }
     }
 
     /// Await the next event.
@@ -390,7 +492,12 @@ impl MediaLibraryChangeStream {
 
 /// Plain-old-data layout of the command payload marshalled by the Swift bridge.
 ///
-/// Must match `MPStreamCommandPayload` in `AsyncStream.swift`.
+/// Must match `@frozen struct MPStreamCommandPayload` in `AsyncStream.swift`.
+/// This buffer is read directly from Swift-supplied bytes, so the ABI is pinned
+/// by the compile-time assertions below and cross-checked at runtime against the
+/// Swift `MemoryLayout` via [`ffi::mp_verify_ffi_layout`] (see
+/// `tests/ffi_layout_tests.rs`). Any field reorder / type change fails the build
+/// here instead of silently over-reading or producing garbage at runtime.
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct RawCommandPayload {
@@ -408,22 +515,43 @@ struct RawCommandPayload {
     language_option_setting: i32,
 }
 
-unsafe extern "C" fn remote_command_cb(
-    _kind: i32,
-    payload: *const c_void,
-    ctx: *mut c_void,
-) {
+// MARK: - RawCommandPayload ABI Layout Assertions
+//
+// Pins the exact ABI shared with the Swift `@frozen struct MPStreamCommandPayload`.
+// If you change the layout here you MUST mirror it in AsyncStream.swift (and the
+// `mp_verify_ffi_layout` check), and vice versa.
+const _: () = {
+    use core::mem::{align_of, offset_of, size_of};
+    assert!(size_of::<RawCommandPayload>() == 72);
+    assert!(align_of::<RawCommandPayload>() == 8);
+    assert!(offset_of!(RawCommandPayload, command_id) == 0);
+    assert!(offset_of!(RawCommandPayload, timestamp) == 8);
+    assert!(offset_of!(RawCommandPayload, extra) == 16);
+    assert!(offset_of!(RawCommandPayload, seek_type) == 24);
+    assert!(offset_of!(RawCommandPayload, rating) == 32);
+    assert!(offset_of!(RawCommandPayload, playback_rate) == 40);
+    assert!(offset_of!(RawCommandPayload, negative) == 48);
+    assert!(offset_of!(RawCommandPayload, shuffle_type) == 52);
+    assert!(offset_of!(RawCommandPayload, repeat_type) == 56);
+    assert!(offset_of!(RawCommandPayload, preserves_shuffle_mode) == 60);
+    assert!(offset_of!(RawCommandPayload, preserves_repeat_mode) == 64);
+    assert!(offset_of!(RawCommandPayload, language_option_setting) == 68);
+};
+
+unsafe extern "C" fn remote_command_cb(_kind: i32, payload: *const c_void, ctx: *mut c_void) {
     if payload.is_null() {
         return;
     }
     // SAFETY: payload points to a stack-allocated MPStreamCommandPayload created by
     // the Swift bridge immediately before this callback returns; the pointer is valid
-    // for the duration of this call and the layout matches RawCommandPayload (#[repr(C)]).
+    // for the duration of this call and the layout matches RawCommandPayload (pinned by
+    // the compile-time asserts above and mp_verify_ffi_layout).
     let raw = unsafe { &*payload.cast::<RawCommandPayload>() };
-    // SAFETY: ctx is the sender_ptr created by Box::into_raw in RemoteCommandStream::subscribe.
-    // Valid for the lifetime of the subscription; freed in SubscriptionHandle::drop after
-    // mp_stream_remote_command_unsubscribe removes the command target.
-    let sender = unsafe { &*ctx.cast::<AsyncStreamSender<CommandEvent>>() };
+    // SAFETY: ctx is the StreamContext pointer created in RemoteCommandStream::subscribe.
+    // It is kept alive by the Swift bridge object's reference for the duration of this
+    // callback, so the sender it owns is valid here.
+    let context = unsafe { &*ctx.cast::<StreamContext>() };
+    let sender = unsafe { &*context.sender.cast::<AsyncStreamSender<CommandEvent>>() };
     let command = Command::from_id(raw.command_id).unwrap_or(Command::Play);
     let event = CommandEvent {
         command,
@@ -487,28 +615,29 @@ impl RemoteCommandStream {
     #[must_use]
     pub fn subscribe(command: Command, capacity: usize) -> Self {
         let (stream, sender) = BoundedAsyncStream::new(capacity);
-        let sender_ptr = Box::into_raw(Box::new(sender));
-        // SAFETY: callback is a valid extern "C" fn pointer; sender_ptr is a valid heap
-        // allocation just created above; Swift retains the returned handle until unsubscribe.
+        let sender_ptr = Box::into_raw(Box::new(sender)).cast::<c_void>();
+        let context = StreamContext::new(sender_ptr, free_command_sender);
+        // SAFETY: callback is a valid extern "C" fn pointer; `context` is a valid heap
+        // allocation just created above; Swift retains the returned handle (and takes a
+        // reference on `context` via context_retain_cb) until unsubscribe.
         let handle_ptr = unsafe {
             ffi::mp_stream_remote_command_subscribe(
                 command as i32,
                 Some(remote_command_cb as StreamEventCallback),
-                sender_ptr.cast(),
+                context.cast(),
+                context_retain_cb,
+                context_release_cb,
             )
         };
-        if handle_ptr.is_null() {
-            // SAFETY: sender_ptr was created by Box::into_raw above; handle_ptr is null
-            // so SubscriptionHandle will not touch sender (set to null below).
-            unsafe { drop(Box::from_raw(sender_ptr)) };
-        }
         let handle = SubscriptionHandle {
             ptr: handle_ptr,
-            sender: if handle_ptr.is_null() { core::ptr::null_mut() } else { sender_ptr.cast() },
+            context,
             unsubscribe: |ptr| unsafe { ffi::mp_stream_remote_command_unsubscribe(ptr) },
-            free_sender: free_command_sender,
         };
-        Self { inner: stream, _handle: handle }
+        Self {
+            inner: stream,
+            _handle: handle,
+        }
     }
 
     /// Await the next remote-command event.
@@ -557,15 +686,16 @@ pub struct NowPlayingSessionEvent {
     pub kind: NowPlayingSessionEventKind,
 }
 
-unsafe extern "C" fn now_playing_session_cb(
-    kind: i32,
-    _payload: *const c_void,
-    ctx: *mut c_void,
-) {
-    // SAFETY: ctx is the sender_ptr created by Box::into_raw in NowPlayingSessionStream::subscribe.
-    // Valid for the lifetime of the subscription; freed in SubscriptionHandle::drop after
-    // mp_now_playing_session_stream_unsubscribe tears down the session.
-    let sender = unsafe { &*ctx.cast::<AsyncStreamSender<NowPlayingSessionEvent>>() };
+unsafe extern "C" fn now_playing_session_cb(kind: i32, _payload: *const c_void, ctx: *mut c_void) {
+    // SAFETY: ctx is the StreamContext pointer created in NowPlayingSessionStream::subscribe.
+    // It is kept alive by the Swift bridge object's reference for the duration of this
+    // callback, so the sender it owns is valid here.
+    let context = unsafe { &*ctx.cast::<StreamContext>() };
+    let sender = unsafe {
+        &*context
+            .sender
+            .cast::<AsyncStreamSender<NowPlayingSessionEvent>>()
+    };
     let event_kind = match kind {
         0 => NowPlayingSessionEventKind::DidChangeActive,
         1 => NowPlayingSessionEventKind::DidChangeCanBecomeActive,
@@ -594,28 +724,29 @@ impl NowPlayingSessionStream {
     #[must_use]
     pub fn subscribe(capacity: usize) -> Self {
         let (stream, sender) = BoundedAsyncStream::new(capacity);
-        let sender_ptr = Box::into_raw(Box::new(sender));
-        // SAFETY: callback is a valid extern "C" fn pointer; sender_ptr is a valid heap
-        // allocation just created above; Swift retains the returned handle until unsubscribe.
-        // On macOS the bridge always returns null, so the sender is freed in the is_null branch.
+        let sender_ptr = Box::into_raw(Box::new(sender)).cast::<c_void>();
+        let context = StreamContext::new(sender_ptr, free_session_sender);
+        // SAFETY: callback is a valid extern "C" fn pointer; `context` is a valid heap
+        // allocation just created above. On macOS the bridge always returns null and
+        // never retains `context`, so Rust's reference (released in SubscriptionHandle::drop)
+        // frees the sender and closes the stream.
         let handle_ptr = unsafe {
             ffi::mp_now_playing_session_stream_subscribe(
                 Some(now_playing_session_cb as StreamEventCallback),
-                sender_ptr.cast(),
+                context.cast(),
+                context_retain_cb,
+                context_release_cb,
             )
         };
-        if handle_ptr.is_null() {
-            // SAFETY: sender_ptr was created by Box::into_raw above; handle_ptr is null
-            // so SubscriptionHandle will not touch sender (set to null below).
-            unsafe { drop(Box::from_raw(sender_ptr)) };
-        }
         let handle = SubscriptionHandle {
             ptr: handle_ptr,
-            sender: if handle_ptr.is_null() { core::ptr::null_mut() } else { sender_ptr.cast() },
+            context,
             unsubscribe: |ptr| unsafe { ffi::mp_now_playing_session_stream_unsubscribe(ptr) },
-            free_sender: free_session_sender,
         };
-        Self { inner: stream, _handle: handle }
+        Self {
+            inner: stream,
+            _handle: handle,
+        }
     }
 
     /// Await the next session event.

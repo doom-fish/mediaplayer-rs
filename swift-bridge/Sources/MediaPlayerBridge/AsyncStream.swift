@@ -16,6 +16,11 @@ public typealias MPStreamCallback = @convention(c) (
     UnsafeMutableRawPointer
 ) -> Void
 
+/// Reference-counting trampoline for the Rust-owned stream context. Each bridge
+/// object takes a +1 in `init` and drops it in `deinit`, keeping the context
+/// (and the sender it owns) alive while a callback may still be in flight.
+public typealias MPContextRefCallback = @convention(c) (UnsafeMutableRawPointer) -> Void
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Notification streams
 //
@@ -46,19 +51,26 @@ final class MPNotificationStreamBridge: NSObject {
     let callback: MPStreamCallback
     let ctx: UnsafeMutableRawPointer
     let kind: Int32
+    let contextRelease: MPContextRefCallback
     var observer: NSObjectProtocol?
 
-    init(kind: Int32, callback: MPStreamCallback, ctx: UnsafeMutableRawPointer) {
+    init(kind: Int32, callback: MPStreamCallback, ctx: UnsafeMutableRawPointer,
+         contextRetain: MPContextRefCallback, contextRelease: MPContextRefCallback) {
         self.kind = kind
         self.callback = callback
         self.ctx = ctx
+        self.contextRelease = contextRelease
         super.init()
+        // Take a +1 on the Rust StreamContext for the lifetime of this object so
+        // an in-flight notification block can never observe a freed sender.
+        contextRetain(ctx)
     }
 
     deinit {
         if let observer = observer {
             NotificationCenter.default.removeObserver(observer)
         }
+        contextRelease(ctx)
     }
 }
 
@@ -72,10 +84,14 @@ final class MPNotificationStreamBridge: NSObject {
 public func mp_notification_subscribe(
     _ kind: Int32,
     _ callback: MPStreamCallback,
-    _ ctx: UnsafeMutableRawPointer
+    _ ctx: UnsafeMutableRawPointer,
+    _ contextRetain: MPContextRefCallback,
+    _ contextRelease: MPContextRefCallback
 ) -> UnsafeMutableRawPointer? {
     guard let name = notificationName(for: kind) else { return nil }
-    let bridge = MPNotificationStreamBridge(kind: kind, callback: callback, ctx: ctx)
+    let bridge = MPNotificationStreamBridge(
+        kind: kind, callback: callback, ctx: ctx,
+        contextRetain: contextRetain, contextRelease: contextRelease)
     bridge.observer = NotificationCenter.default.addObserver(
         forName: name,
         object: nil,
@@ -109,22 +125,51 @@ public func mp_notification_unsubscribe(_ handle: UnsafeMutableRawPointer?) {
 
 /// Plain-old-data view of a remote command event passed across the FFI boundary.
 /// All fields are always present; unused ones are set to NaN / -1 / 0.
-private struct MPStreamCommandPayload {
-    var commandId: Int32
-    var timestamp: Double
-    var extra: Double        // skip interval OR playback position
-    var seekType: Int32      // -1 = not a seek event
-    var rating: Double
-    var playbackRate: Double
-    var negative: Int32      // -1 = not a feedback event
-    var shuffleType: Int32
-    var repeatType: Int32
-    var preservesShuffleMode: Int32
-    var preservesRepeatMode: Int32
-    var languageOptionSetting: Int32
+///
+/// `@frozen` pins the field layout: this struct is read directly from its raw
+/// bytes by Rust's `RawCommandPayload`. The size/offsets are cross-checked at
+/// runtime by `mp_verify_ffi_layout`.
+@frozen
+public struct MPStreamCommandPayload {
+    public var commandId: Int32
+    public var timestamp: Double
+    public var extra: Double        // skip interval OR playback position
+    public var seekType: Int32      // -1 = not a seek event
+    public var rating: Double
+    public var playbackRate: Double
+    public var negative: Int32      // -1 = not a feedback event
+    public var shuffleType: Int32
+    public var repeatType: Int32
+    public var preservesShuffleMode: Int32
+    public var preservesRepeatMode: Int32
+    public var languageOptionSetting: Int32
     // Note: LanguageOption pointer is intentionally omitted to keep payload
     // POD-safe for stack passing; callers that need it can use the
     // full-fat CommandToken API instead.
+}
+
+/// Cross-language ABI check called from Rust's `tests/ffi_layout_tests.rs`.
+///
+/// Returns `true` only if the Swift `MemoryLayout` (size, stride, alignment and
+/// field offsets) of `MPStreamCommandPayload` matches the values pinned on the
+/// Rust side via the `const _: () = { … }` asserts for `RawCommandPayload`.
+@_cdecl("mp_verify_ffi_layout")
+public func mp_verify_ffi_layout() -> Bool {
+    return MemoryLayout<MPStreamCommandPayload>.size == 72
+        && MemoryLayout<MPStreamCommandPayload>.stride == 72
+        && MemoryLayout<MPStreamCommandPayload>.alignment == 8
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.commandId) == 0
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.timestamp) == 8
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.extra) == 16
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.seekType) == 24
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.rating) == 32
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.playbackRate) == 40
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.negative) == 48
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.shuffleType) == 52
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.repeatType) == 56
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.preservesShuffleMode) == 60
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.preservesRepeatMode) == 64
+        && MemoryLayout<MPStreamCommandPayload>.offset(of: \.languageOptionSetting) == 68
 }
 
 /// Holds one remote-command handler token and forwards events to Rust.
@@ -133,21 +178,28 @@ final class MPRemoteCommandStreamBridge: NSObject {
     let callback: MPStreamCallback
     let ctx: UnsafeMutableRawPointer
     let commandId: Int32
+    let contextRelease: MPContextRefCallback
     var handlerToken: Any?
 
     init(command: MPRemoteCommand, commandId: Int32,
-         callback: MPStreamCallback, ctx: UnsafeMutableRawPointer) {
+         callback: MPStreamCallback, ctx: UnsafeMutableRawPointer,
+         contextRetain: MPContextRefCallback, contextRelease: MPContextRefCallback) {
         self.command = command
         self.commandId = commandId
         self.callback = callback
         self.ctx = ctx
+        self.contextRelease = contextRelease
         super.init()
+        // Take a +1 on the Rust StreamContext for the lifetime of this object so
+        // an in-flight command event can never observe a freed sender.
+        contextRetain(ctx)
     }
 
     deinit {
         if let token = handlerToken {
             command.removeTarget(token)
         }
+        contextRelease(ctx)
     }
 }
 
@@ -188,11 +240,14 @@ private func mpRemoteCommandForStream(_ id: Int32) -> MPRemoteCommand? {
 public func mp_stream_remote_command_subscribe(
     _ commandId: Int32,
     _ callback: MPStreamCallback,
-    _ ctx: UnsafeMutableRawPointer
+    _ ctx: UnsafeMutableRawPointer,
+    _ contextRetain: MPContextRefCallback,
+    _ contextRelease: MPContextRefCallback
 ) -> UnsafeMutableRawPointer? {
     guard let command = mpRemoteCommandForStream(commandId) else { return nil }
     let bridge = MPRemoteCommandStreamBridge(
-        command: command, commandId: commandId, callback: callback, ctx: ctx)
+        command: command, commandId: commandId, callback: callback, ctx: ctx,
+        contextRetain: contextRetain, contextRelease: contextRelease)
     bridge.handlerToken = command.addTarget { event in
         var payload = MPStreamCommandPayload(
             commandId: commandId,
@@ -266,8 +321,12 @@ public func mp_stream_remote_command_unsubscribe(_ handle: UnsafeMutableRawPoint
 @_cdecl("mp_now_playing_session_stream_subscribe")
 public func mp_now_playing_session_stream_subscribe(
     _ callback: MPStreamCallback,
-    _ ctx: UnsafeMutableRawPointer
+    _ ctx: UnsafeMutableRawPointer,
+    _ contextRetain: MPContextRefCallback,
+    _ contextRelease: MPContextRefCallback
 ) -> UnsafeMutableRawPointer? {
+    // Returns nil without retaining `ctx`; the Rust side releases its own
+    // reference, freeing the sender and closing the stream immediately.
     return nil
 }
 

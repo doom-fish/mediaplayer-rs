@@ -1,4 +1,0 @@
-module MediaPlayerBridge {
-    header "MediaPlayerBridge.h"
-    export *
-}

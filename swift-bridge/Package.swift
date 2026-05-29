@@ -15,7 +15,6 @@ let package = Package(
     targets: [
         .target(
             name: "MediaPlayerBridge",
-            path: "Sources/MediaPlayerBridge",
-            publicHeadersPath: "include")
+            path: "Sources/MediaPlayerBridge")
     ]
 )
