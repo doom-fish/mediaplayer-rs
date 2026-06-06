@@ -229,7 +229,15 @@ unsafe extern "C" fn command_trampoline(
             .then(|| LanguageOptionSetting::from_raw(language_option_setting)),
     };
 
-    handler(event) as i32
+    // The user closure can panic; unwinding across the `extern "C"` boundary
+    // into Swift/MediaPlayer is undefined behaviour. Catch it and report a
+    // failed command status instead. This handler fires repeatedly for the
+    // lifetime of the registration, so every invocation must be guarded.
+    let mut status = HandlerStatus::CommandFailed as i32;
+    doom_fish_utils::panic_safe::catch_user_panic("remote_commands::command_trampoline", || {
+        status = handler(event) as i32;
+    });
+    status
 }
 
 /// RAII guard that keeps a remote command handler registered.
