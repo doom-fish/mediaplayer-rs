@@ -7,8 +7,8 @@ fn artwork_loads_fixture_and_reports_bounds() {
     let bounds = artwork
         .bounds()
         .expect("artwork bounds should be available");
-    assert!(bounds.width > 0.0);
-    assert!(bounds.height > 0.0);
+    assert!(bounds.size.width > 0.0);
+    assert!(bounds.size.height > 0.0);
 
     let cloned = artwork.clone();
     drop(artwork);
@@ -16,8 +16,8 @@ fn artwork_loads_fixture_and_reports_bounds() {
     let cloned_bounds = cloned
         .bounds()
         .expect("cloned artwork bounds should be available");
-    assert!((bounds.width - cloned_bounds.width).abs() < f64::EPSILON);
-    assert!((bounds.height - cloned_bounds.height).abs() < f64::EPSILON);
+    assert!((bounds.size.width - cloned_bounds.size.width).abs() < f64::EPSILON);
+    assert!((bounds.size.height - cloned_bounds.size.height).abs() < f64::EPSILON);
 }
 
 #[test]

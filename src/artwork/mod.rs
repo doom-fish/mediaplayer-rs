@@ -89,19 +89,14 @@ impl Artwork {
         let ok = unsafe {
             ffi::mp_artwork_copy_bounds(
                 self.ptr,
-                &mut origin_x,
-                &mut origin_y,
-                &mut width,
-                &mut height,
+                &raw mut origin_x,
+                &raw mut origin_y,
+                &raw mut width,
+                &raw mut height,
             ) != 0
         };
 
-        ok.then_some(CGRect {
-            x: origin_x,
-            y: origin_y,
-            width,
-            height,
-        })
+        ok.then_some(CGRect::new(origin_x, origin_y, width, height))
     }
 }
 
