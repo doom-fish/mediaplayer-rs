@@ -1,25 +1,25 @@
 # mediaplayer coverage audit v2 (vs MacOSX26.2.sdk)
 
 SDK_PUBLIC_SYMBOLS: 121
-VERIFIED: 120
+VERIFIED: 112
 GAPS: 0
-EXEMPT: 1
+EXEMPT: 9
 COVERAGE_PCT: 100.00%
 
-Audit methodology: Re-verified all 121 top-level public declarations (interfaces/categories/protocols, typedefs/enums, exported constants/functions) from v1 against the macOS 26.2 SDK headers. No symbols were removed between versions, and no new top-level public API surface was added in macOS 26.2. The single EXEMPT entry (MPNowPlayingInfoPropertyAdTimeRanges) was re-validated: the key remains macOS-available, but its required value type MPAdTimeRange is explicitly unavailable on macOS via `MP_UNAVAILABLE_BEGIN(watchos, macos)` in MPNowPlayingSession.h.
+Audit methodology: Re-verified all 121 top-level public declarations (interfaces/categories/protocols, typedefs/enums, exported constants/functions) from v1 against the macOS 26.2 SDK headers. No symbols were removed between versions, and no new top-level public API surface was added in macOS 26.2. The original EXEMPT entry (MPNowPlayingInfoPropertyAdTimeRanges) was re-validated: the key remains macOS-available, but its required value type MPAdTimeRange is explicitly unavailable on macOS via `MP_UNAVAILABLE_BEGIN(watchos, macos)` in MPNowPlayingSession.h. VERIFIED means the symbol has a usable Rust entry point, so the eight constants the crate exposes by name only (`MPMediaPlaylistProperty*` and `MPMediaPlaybackIsPreparedToPlayDidChangeNotification`, which no macOS API consumes) are counted as EXEMPT. The `MPMediaItemProperty*` keys are usable through `NowPlayingInfo::value`.
 
 ## 🟢 VERIFIED
 | Symbol | Kind | Header | Wrapped by |
 | --- | --- | --- | --- |
 | `MPErrorCode` | enum | `MPError.h` | ErrorCode |
 | `MPErrorDomain` | constant | `MPError.h` | ERROR_DOMAIN |
-| `MPMediaItemArtwork` | class | `MPMediaItem.h` | Artwork::{from_path, from_path_with_size, bounds}; NowPlayingInfoCenter::set_now_playing_info_with_artwork (imageWithSize/imageCropRect not surfaced) |
+| `MPMediaItemArtwork` | class | `MPMediaItem.h` | Artwork::{from_path, from_path_with_size, from_image_data, bounds, image_png_data}; NowPlayingInfoCenter::set_now_playing_info_with_artwork (imageCropRect not surfaced) |
 | `MPMediaItemPropertyTitle` | constant | `MPMediaItem.h` | NowPlayingInfo::title |
 | `MPMediaItemPropertyAlbumTitle` | constant | `MPMediaItem.h` | NowPlayingInfo::album_title |
 | `MPMediaItemPropertyArtist` | constant | `MPMediaItem.h` | NowPlayingInfo::artist |
 | `MPMediaItemPropertyPlaybackDuration` | constant | `MPMediaItem.h` | NowPlayingInfo::playback_duration |
 | `MPMediaItemPropertyArtwork` | constant | `MPMediaItem.h` | NowPlayingInfoCenter::set_now_playing_info_with_artwork |
-| `MPNowPlayingInfoCenter` | class | `MPNowPlayingInfoCenter.h` | NowPlayingInfoCenter::{default_center, set_now_playing_info, set_now_playing_info_with_artwork, clear, set_playback_state, playback_state, supported_animated_artwork_keys} |
+| `MPNowPlayingInfoCenter` | class | `MPNowPlayingInfoCenter.h` | NowPlayingInfoCenter::{default_center, set_now_playing_info, set_now_playing_info_with_artwork, now_playing_info, clear, set_playback_state, playback_state, supported_animated_artwork_keys} |
 | `MPNowPlayingInfoMediaType` | enum | `MPNowPlayingInfoCenter.h` | NowPlayingMediaType |
 | `MPNowPlayingPlaybackState` | enum | `MPNowPlayingInfoCenter.h` | PlaybackState |
 | `MPNowPlayingInfoPropertyElapsedPlaybackTime` | constant | `MPNowPlayingInfoCenter.h` | NowPlayingInfo::elapsed_playback_time |
@@ -74,63 +74,55 @@ Audit methodology: Re-verified all 121 top-level public declarations (interfaces
 | `AVMediaSelectionGroup (MPNowPlayingInfoLanguageOptionAdditions)` | category | `AVFoundation+MPNowPlayingInfoLanguageOptionAdditions.h` | LanguageOptionGroup::from_av_media_selection_group_raw |
 | `MPContentItem` | class | `MPContentItem.h` | ContentItem::{new, identifier, title, set_title, subtitle, set_subtitle, artwork, set_artwork, playback_progress, set_playback_progress, is_streaming_content, set_streaming_content, is_explicit_content, set_explicit_content, is_container, set_container, is_playable, set_playable} |
 | `MPMediaEntityPersistentID` | typedef | `MPMediaEntity.h` | MediaEntityPersistentId |
-| `MPMediaEntityPropertyPersistentID` | constant | `MPMediaEntity.h` | constants::MEDIA_ENTITY_PERSISTENT_ID |
+| `MPMediaEntityPropertyPersistentID` | constant | `MPMediaEntity.h` | constants::MEDIA_ENTITY_PERSISTENT_ID; NowPlayingInfo::value |
 | `MPMediaItemAnimatedArtwork` | class | `MPMediaItem.h` | AnimatedArtwork::from_files; NowPlayingInfo::{animated_artwork_1x1, animated_artwork_3x4} |
 | `MPMediaType` | enum | `MPMediaItem.h` | MediaType |
-| `MPMediaItemPropertyPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PERSISTENT_ID |
-| `MPMediaItemPropertyMediaType` | constant | `MPMediaItem.h` | MediaType; constants::MEDIA_ITEM_MEDIA_TYPE |
-| `MPMediaItemPropertyAlbumPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_PERSISTENT_ID |
-| `MPMediaItemPropertyArtistPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ARTIST_PERSISTENT_ID |
-| `MPMediaItemPropertyAlbumArtist` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_ARTIST |
-| `MPMediaItemPropertyAlbumArtistPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_ARTIST_PERSISTENT_ID |
-| `MPMediaItemPropertyGenre` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_GENRE |
-| `MPMediaItemPropertyGenrePersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_GENRE_PERSISTENT_ID |
-| `MPMediaItemPropertyComposer` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMPOSER |
-| `MPMediaItemPropertyComposerPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMPOSER_PERSISTENT_ID |
-| `MPMediaItemPropertyAlbumTrackNumber` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_TRACK_NUMBER |
-| `MPMediaItemPropertyAlbumTrackCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_TRACK_COUNT |
-| `MPMediaItemPropertyDiscNumber` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DISC_NUMBER |
-| `MPMediaItemPropertyDiscCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DISC_COUNT |
-| `MPMediaItemPropertyIsExplicit` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_EXPLICIT |
-| `MPMediaItemPropertyLyrics` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_LYRICS |
-| `MPMediaItemPropertyIsCompilation` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_COMPILATION |
-| `MPMediaItemPropertyReleaseDate` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_RELEASE_DATE |
-| `MPMediaItemPropertyBeatsPerMinute` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_BEATS_PER_MINUTE |
-| `MPMediaItemPropertyComments` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMMENTS |
-| `MPMediaItemPropertyAssetURL` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ASSET_URL |
-| `MPMediaItemPropertyIsCloudItem` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_CLOUD_ITEM |
-| `MPMediaItemPropertyHasProtectedAsset` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_HAS_PROTECTED_ASSET |
-| `MPMediaItemPropertyPodcastTitle` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PODCAST_TITLE |
-| `MPMediaItemPropertyPodcastPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PODCAST_PERSISTENT_ID |
-| `MPMediaItemPropertyPlayCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PLAY_COUNT |
-| `MPMediaItemPropertySkipCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_SKIP_COUNT |
-| `MPMediaItemPropertyRating` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_RATING |
-| `MPMediaItemPropertyLastPlayedDate` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_LAST_PLAYED_DATE |
-| `MPMediaItemPropertyUserGrouping` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_USER_GROUPING |
-| `MPMediaItemPropertyBookmarkTime` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_BOOKMARK_TIME |
-| `MPMediaItemPropertyDateAdded` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DATE_ADDED |
-| `MPMediaItemPropertyPlaybackStoreID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PLAYBACK_STORE_ID |
-| `MPMediaItemPropertyIsPreorder` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_PREORDER |
-| `MPMediaPlaybackIsPreparedToPlayDidChangeNotification` | constant | `MPMediaPlayback.h` | constants::PLAYBACK_IS_PREPARED_TO_PLAY_DID_CHANGE_NOTIFICATION |
-| `MPMediaPlaylistPropertyPersistentID` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_PERSISTENT_ID |
-| `MPMediaPlaylistPropertyCloudGlobalID` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_CLOUD_GLOBAL_ID |
-| `MPMediaPlaylistPropertyName` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_NAME |
-| `MPMediaPlaylistPropertyPlaylistAttributes` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_PLAYLIST_ATTRIBUTES |
-| `MPMediaPlaylistPropertySeedItems` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_SEED_ITEMS |
-| `MPMediaPlaylistPropertyDescriptionText` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_DESCRIPTION_TEXT |
-| `MPMediaPlaylistPropertyAuthorDisplayName` | constant | `MPMediaPlaylist.h` | constants::PLAYLIST_AUTHOR_DISPLAY_NAME |
+| `MPMediaItemPropertyPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PERSISTENT_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyMediaType` | constant | `MPMediaItem.h` | MediaType; constants::MEDIA_ITEM_MEDIA_TYPE; NowPlayingInfo::value |
+| `MPMediaItemPropertyAlbumPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_PERSISTENT_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyArtistPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ARTIST_PERSISTENT_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyAlbumArtist` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_ARTIST; NowPlayingInfo::value |
+| `MPMediaItemPropertyAlbumArtistPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_ARTIST_PERSISTENT_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyGenre` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_GENRE; NowPlayingInfo::value |
+| `MPMediaItemPropertyGenrePersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_GENRE_PERSISTENT_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyComposer` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMPOSER; NowPlayingInfo::value |
+| `MPMediaItemPropertyComposerPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMPOSER_PERSISTENT_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyAlbumTrackNumber` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_TRACK_NUMBER; NowPlayingInfo::value |
+| `MPMediaItemPropertyAlbumTrackCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ALBUM_TRACK_COUNT; NowPlayingInfo::value |
+| `MPMediaItemPropertyDiscNumber` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DISC_NUMBER; NowPlayingInfo::value |
+| `MPMediaItemPropertyDiscCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DISC_COUNT; NowPlayingInfo::value |
+| `MPMediaItemPropertyIsExplicit` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_EXPLICIT; NowPlayingInfo::value |
+| `MPMediaItemPropertyLyrics` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_LYRICS; NowPlayingInfo::value |
+| `MPMediaItemPropertyIsCompilation` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_COMPILATION; NowPlayingInfo::value |
+| `MPMediaItemPropertyReleaseDate` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_RELEASE_DATE; NowPlayingInfo::value |
+| `MPMediaItemPropertyBeatsPerMinute` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_BEATS_PER_MINUTE; NowPlayingInfo::value |
+| `MPMediaItemPropertyComments` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_COMMENTS; NowPlayingInfo::value |
+| `MPMediaItemPropertyAssetURL` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_ASSET_URL; NowPlayingInfo::value |
+| `MPMediaItemPropertyIsCloudItem` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_CLOUD_ITEM; NowPlayingInfo::value |
+| `MPMediaItemPropertyHasProtectedAsset` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_HAS_PROTECTED_ASSET; NowPlayingInfo::value |
+| `MPMediaItemPropertyPodcastTitle` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PODCAST_TITLE; NowPlayingInfo::value |
+| `MPMediaItemPropertyPodcastPersistentID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PODCAST_PERSISTENT_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyPlayCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PLAY_COUNT; NowPlayingInfo::value |
+| `MPMediaItemPropertySkipCount` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_SKIP_COUNT; NowPlayingInfo::value |
+| `MPMediaItemPropertyRating` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_RATING; NowPlayingInfo::value |
+| `MPMediaItemPropertyLastPlayedDate` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_LAST_PLAYED_DATE; NowPlayingInfo::value |
+| `MPMediaItemPropertyUserGrouping` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_USER_GROUPING; NowPlayingInfo::value |
+| `MPMediaItemPropertyBookmarkTime` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_BOOKMARK_TIME; NowPlayingInfo::value |
+| `MPMediaItemPropertyDateAdded` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_DATE_ADDED; NowPlayingInfo::value |
+| `MPMediaItemPropertyPlaybackStoreID` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_PLAYBACK_STORE_ID; NowPlayingInfo::value |
+| `MPMediaItemPropertyIsPreorder` | constant | `MPMediaItem.h` | constants::MEDIA_ITEM_IS_PREORDER; NowPlayingInfo::value |
 | `MPNowPlayingInfoProperty1x1AnimatedArtwork` | constant | `MPNowPlayingInfoCenter.h` | constants::ANIMATED_ARTWORK_1X1; NowPlayingInfo::animated_artwork_1x1 |
 | `MPNowPlayingInfoProperty3x4AnimatedArtwork` | constant | `MPNowPlayingInfoCenter.h` | constants::ANIMATED_ARTWORK_3X4; NowPlayingInfo::animated_artwork_3x4 |
-| `MPLanguageOptionCharacteristicIsMainProgramContent` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_IS_MAIN_PROGRAM_CONTENT |
-| `MPLanguageOptionCharacteristicIsAuxiliaryContent` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_IS_AUXILIARY_CONTENT |
-| `MPLanguageOptionCharacteristicContainsOnlyForcedSubtitles` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_CONTAINS_ONLY_FORCED_SUBTITLES |
-| `MPLanguageOptionCharacteristicTranscribesSpokenDialog` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_TRANSCRIBES_SPOKEN_DIALOG |
-| `MPLanguageOptionCharacteristicDescribesMusicAndSound` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DESCRIBES_MUSIC_AND_SOUND |
-| `MPLanguageOptionCharacteristicEasyToRead` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_EASY_TO_READ |
-| `MPLanguageOptionCharacteristicDescribesVideo` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DESCRIBES_VIDEO |
-| `MPLanguageOptionCharacteristicLanguageTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_LANGUAGE_TRANSLATION |
-| `MPLanguageOptionCharacteristicDubbedTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DUBBED_TRANSLATION |
-| `MPLanguageOptionCharacteristicVoiceOverTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_VOICE_OVER_TRANSLATION |
+| `MPLanguageOptionCharacteristicIsMainProgramContent` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_IS_MAIN_PROGRAM_CONTENT (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicIsAuxiliaryContent` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_IS_AUXILIARY_CONTENT (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicContainsOnlyForcedSubtitles` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_CONTAINS_ONLY_FORCED_SUBTITLES (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicTranscribesSpokenDialog` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_TRANSCRIBES_SPOKEN_DIALOG (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicDescribesMusicAndSound` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DESCRIBES_MUSIC_AND_SOUND (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicEasyToRead` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_EASY_TO_READ (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicDescribesVideo` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DESCRIBES_VIDEO (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicLanguageTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_LANGUAGE_TRANSLATION (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicDubbedTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_DUBBED_TRANSLATION (translated by LanguageOption::new) |
+| `MPLanguageOptionCharacteristicVoiceOverTranslation` | constant | `MPNowPlayingInfoLanguageOption.h` | constants::LANGUAGE_OPTION_CHARACTERISTIC_VOICE_OVER_TRANSLATION (translated by LanguageOption::new) |
 
 ## 🔴 GAPS
 None.
@@ -139,3 +131,11 @@ None.
 | Symbol | Kind | Header | Reason | SDK attribute |
 | --- | --- | --- | --- | --- |
 | `MPNowPlayingInfoPropertyAdTimeRanges` | constant | `MPNowPlayingInfoCenter.h` | The key is public on macOS, but its required value type MPAdTimeRange is explicitly unavailable on macOS, so safe Rust cannot construct the payload. | MPAdTimeRange is enclosed in `MP_UNAVAILABLE_BEGIN(watchos, macos)` in MPNowPlayingSession.h |
+| `MPMediaPlaybackIsPreparedToPlayDidChangeNotification` | constant | `MPMediaPlayback.h` | Only the symbol name is exposed (constants::PLAYBACK_IS_PREPARED_TO_PLAY_DID_CHANGE_NOTIFICATION); the notification belongs to the deprecated iOS `MPMediaPlayback` surface. | `MP_DEPRECATED("Use AVPlayerViewController in AVKit.", ios(3.2, 9.0))` |
+| `MPMediaPlaylistPropertyPersistentID` | constant | `MPMediaPlaylist.h` | Only the symbol name is exposed (constants::PLAYLIST_PERSISTENT_ID); `MPMediaPlaylist` is iOS-only, so no macOS API consumes the key. | `MPMediaPlaylist` is `MP_API(ios(3.0))` |
+| `MPMediaPlaylistPropertyCloudGlobalID` | constant | `MPMediaPlaylist.h` | Only the symbol name is exposed (constants::PLAYLIST_CLOUD_GLOBAL_ID); `MPMediaPlaylist` is iOS-only, so no macOS API consumes the key. | `MPMediaPlaylist` is `MP_API(ios(3.0))` |
+| `MPMediaPlaylistPropertyName` | constant | `MPMediaPlaylist.h` | Only the symbol name is exposed (constants::PLAYLIST_NAME); `MPMediaPlaylist` is iOS-only, so no macOS API consumes the key. | `MPMediaPlaylist` is `MP_API(ios(3.0))` |
+| `MPMediaPlaylistPropertyPlaylistAttributes` | constant | `MPMediaPlaylist.h` | Only the symbol name is exposed (constants::PLAYLIST_PLAYLIST_ATTRIBUTES); `MPMediaPlaylist` is iOS-only, so no macOS API consumes the key. | `MPMediaPlaylist` is `MP_API(ios(3.0))` |
+| `MPMediaPlaylistPropertySeedItems` | constant | `MPMediaPlaylist.h` | Only the symbol name is exposed (constants::PLAYLIST_SEED_ITEMS); `MPMediaPlaylist` is iOS-only, so no macOS API consumes the key. | `MPMediaPlaylist` is `MP_API(ios(3.0))` |
+| `MPMediaPlaylistPropertyDescriptionText` | constant | `MPMediaPlaylist.h` | Only the symbol name is exposed (constants::PLAYLIST_DESCRIPTION_TEXT); `MPMediaPlaylist` is iOS-only, so no macOS API consumes the key. | `MPMediaPlaylist` is `MP_API(ios(3.0))` |
+| `MPMediaPlaylistPropertyAuthorDisplayName` | constant | `MPMediaPlaylist.h` | Only the symbol name is exposed (constants::PLAYLIST_AUTHOR_DISPLAY_NAME); `MPMediaPlaylist` is iOS-only, so no macOS API consumes the key. | `MPMediaPlaylist` is `MP_API(ios(3.0))` |
