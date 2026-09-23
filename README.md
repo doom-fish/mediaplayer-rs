@@ -15,7 +15,7 @@ Safe Rust bindings for Apple's `MediaPlayer.framework` on macOS.
 Enable with `features = ["async"]`:
 
 ```toml
-mediaplayer = { version = "0.3", features = ["async"] }
+mediaplayer = { version = "0.5", features = ["async"] }
 ```
 
 | Stream type | Apple surface | macOS |

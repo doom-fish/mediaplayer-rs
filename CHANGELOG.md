@@ -1,5 +1,51 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.5.0] - Unreleased
+
+### Security
+
+- Remote-command handler blocks now own their Rust context through `CallbackContext`. Dropping a `CommandToken` (on any thread) removes the target, and the closure is freed only when MediaPlayer releases the block, so a delivery that is already running can no longer use a freed closure. Deliveries to one handler are serialized, and a re-entrant delivery gets `HandlerStatus::CommandFailed`.
+- `RemoteCommandStream` is built on the same registration. Its old Swift bridge captured the raw context pointer in the handler block.
+
+### Fixed
+
+- A failed handler registration returns `Err(MediaPlayerError::Framework)` instead of a token that does nothing, and the Swift side releases the context it was handed.
+- The language option passed to command handlers is no longer retained without a matching release (it leaked when no context was registered).
+- Now-playing strings containing NUL bytes return `InvalidArgument` instead of silently becoming empty strings.
+- Animated-artwork availability checks use `#available(macOS 26.0, *)` instead of `macOS 16.0`.
+- `LanguageOption::new` translates the `constants::LANGUAGE_OPTION_CHARACTERISTIC_*` names to the SDK's characteristic values.
+- The artwork request handler aspect-fits the image to the requested size instead of always returning the full image.
+- Swift conversions of framework enum values and indices clamp instead of trapping on unexpected values.
+
+### Changed
+
+- **Breaking:** `add_handler` and the `on_*` helpers return `Result<CommandToken, MediaPlayerError>`.
+- **Breaking:** `NowPlayingInfoCenter::set_now_playing_info` and `set_now_playing_info_with_artwork` return `Result<(), MediaPlayerError>`. A rejected update leaves the current now-playing info untouched.
+- **Breaking:** `RemoteCommandStream::subscribe` returns `Result` and rejects a capacity of 0. `NowPlayingItemChangeStream`, `PlaybackStateChangeStream`, `VolumeChangeStream`, `MediaLibraryChangeStream` and `NowPlayingSessionStream::subscribe` return `Err(MediaPlayerError::NotAvailable)`: Apple marks those notifications and the session delegate unavailable on macOS, so the streams could never deliver an event.
+- **Breaking:** `NowPlayingInfo` has a new public `values` field.
+- **Breaking:** the raw `ffi::mp_remote_command_add_handler` takes a context release callback.
+- **Breaking:** requires apple-cf 0.11, so `Artwork::bounds` returns the nested `CGRect { origin, size }`, and doom-fish-utils 0.4.1.
+- `rust-version` is 1.82.
+
+### Added
+
+- `NowPlayingInfo::value(key, NowPlayingValue)` sets any media-item or now-playing key in `constants` (composer, genre, album artist, track and disc numbers, persistent IDs, ...), by symbol name or raw key value.
+- `NowPlayingInfoCenter::now_playing_info` reads `nowPlayingInfo` back as a `BTreeMap<String, NowPlayingValue>`.
+- `Artwork::from_image_data` creates artwork from in-memory image data, and `Artwork::image_png_data` returns the image the artwork produces for a size.
+
+### Removed
+
+- The notification and session-delegate Swift bridges behind the unavailable streams and the old stream bridge, together with `ffi::mp_notification_*`, `ffi::mp_stream_remote_command_*`, `ffi::mp_now_playing_session_stream_*`, `ffi::StreamEventCallback`, `ffi::ContextRefCallback`, the pinned command payload layout and `ffi::mp_verify_ffi_layout`.
+
+## [0.4.3] - 2026-06-06
+
+- Guarded the remote-command handler against panics crossing the FFI boundary, reference-counted the async stream context, pinned the command payload ABI, and dropped a placeholder header.
+
 ## [0.4.2] - 2026-05-20
 
 - Migrated local `take_string` body to call `doom_fish_utils::ffi_string::take_owned_cstring_c`. Centralises the duplicated FFI take-string pattern fleet-wide. No public API change.
