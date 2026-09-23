@@ -99,16 +99,300 @@ private func mpNowPlayingDictionaryKey(_ rawValue: Int32) -> String? {
         }
         return nil
     case .animatedArtwork1x1:
-        if #available(macOS 16.0, *) {
+        if #available(macOS 26.0, *) {
             return MPNowPlayingInfoProperty1x1AnimatedArtwork
         }
         return nil
     case .animatedArtwork3x4:
-        if #available(macOS 16.0, *) {
+        if #available(macOS 26.0, *) {
             return MPNowPlayingInfoProperty3x4AnimatedArtwork
         }
         return nil
     }
+}
+
+private func mpNamedNowPlayingKeys() -> [(name: String, key: String)] {
+    var keys: [(name: String, key: String)] = [
+        ("MPMediaEntityPropertyPersistentID", MPMediaEntityPropertyPersistentID),
+        ("MPMediaItemPropertyPersistentID", MPMediaItemPropertyPersistentID),
+        ("MPMediaItemPropertyMediaType", MPMediaItemPropertyMediaType),
+        ("MPMediaItemPropertyTitle", MPMediaItemPropertyTitle),
+        ("MPMediaItemPropertyArtist", MPMediaItemPropertyArtist),
+        ("MPMediaItemPropertyAlbumTitle", MPMediaItemPropertyAlbumTitle),
+        ("MPMediaItemPropertyAlbumPersistentID", MPMediaItemPropertyAlbumPersistentID),
+        ("MPMediaItemPropertyArtistPersistentID", MPMediaItemPropertyArtistPersistentID),
+        ("MPMediaItemPropertyAlbumArtist", MPMediaItemPropertyAlbumArtist),
+        ("MPMediaItemPropertyAlbumArtistPersistentID", MPMediaItemPropertyAlbumArtistPersistentID),
+        ("MPMediaItemPropertyGenre", MPMediaItemPropertyGenre),
+        ("MPMediaItemPropertyGenrePersistentID", MPMediaItemPropertyGenrePersistentID),
+        ("MPMediaItemPropertyComposer", MPMediaItemPropertyComposer),
+        ("MPMediaItemPropertyComposerPersistentID", MPMediaItemPropertyComposerPersistentID),
+        ("MPMediaItemPropertyPlaybackDuration", MPMediaItemPropertyPlaybackDuration),
+        ("MPMediaItemPropertyAlbumTrackNumber", MPMediaItemPropertyAlbumTrackNumber),
+        ("MPMediaItemPropertyAlbumTrackCount", MPMediaItemPropertyAlbumTrackCount),
+        ("MPMediaItemPropertyDiscNumber", MPMediaItemPropertyDiscNumber),
+        ("MPMediaItemPropertyDiscCount", MPMediaItemPropertyDiscCount),
+        ("MPMediaItemPropertyArtwork", MPMediaItemPropertyArtwork),
+        ("MPMediaItemPropertyIsExplicit", MPMediaItemPropertyIsExplicit),
+        ("MPMediaItemPropertyLyrics", MPMediaItemPropertyLyrics),
+        ("MPMediaItemPropertyIsCompilation", MPMediaItemPropertyIsCompilation),
+        ("MPMediaItemPropertyReleaseDate", MPMediaItemPropertyReleaseDate),
+        ("MPMediaItemPropertyBeatsPerMinute", MPMediaItemPropertyBeatsPerMinute),
+        ("MPMediaItemPropertyComments", MPMediaItemPropertyComments),
+        ("MPMediaItemPropertyAssetURL", MPMediaItemPropertyAssetURL),
+        ("MPMediaItemPropertyIsCloudItem", MPMediaItemPropertyIsCloudItem),
+        ("MPMediaItemPropertyHasProtectedAsset", MPMediaItemPropertyHasProtectedAsset),
+        ("MPMediaItemPropertyPodcastTitle", MPMediaItemPropertyPodcastTitle),
+        ("MPMediaItemPropertyPodcastPersistentID", MPMediaItemPropertyPodcastPersistentID),
+        ("MPMediaItemPropertyPlayCount", MPMediaItemPropertyPlayCount),
+        ("MPMediaItemPropertySkipCount", MPMediaItemPropertySkipCount),
+        ("MPMediaItemPropertyRating", MPMediaItemPropertyRating),
+        ("MPMediaItemPropertyLastPlayedDate", MPMediaItemPropertyLastPlayedDate),
+        ("MPMediaItemPropertyUserGrouping", MPMediaItemPropertyUserGrouping),
+        ("MPMediaItemPropertyBookmarkTime", MPMediaItemPropertyBookmarkTime),
+        ("MPMediaItemPropertyDateAdded", MPMediaItemPropertyDateAdded),
+        ("MPMediaItemPropertyPlaybackStoreID", MPMediaItemPropertyPlaybackStoreID),
+        ("MPMediaItemPropertyIsPreorder", MPMediaItemPropertyIsPreorder),
+        ("MPNowPlayingInfoPropertyElapsedPlaybackTime", MPNowPlayingInfoPropertyElapsedPlaybackTime),
+        ("MPNowPlayingInfoPropertyPlaybackRate", MPNowPlayingInfoPropertyPlaybackRate),
+        ("MPNowPlayingInfoPropertyDefaultPlaybackRate", MPNowPlayingInfoPropertyDefaultPlaybackRate),
+        ("MPNowPlayingInfoPropertyPlaybackQueueIndex", MPNowPlayingInfoPropertyPlaybackQueueIndex),
+        ("MPNowPlayingInfoPropertyPlaybackQueueCount", MPNowPlayingInfoPropertyPlaybackQueueCount),
+        ("MPNowPlayingInfoPropertyChapterNumber", MPNowPlayingInfoPropertyChapterNumber),
+        ("MPNowPlayingInfoPropertyChapterCount", MPNowPlayingInfoPropertyChapterCount),
+        ("MPNowPlayingInfoPropertyIsLiveStream", MPNowPlayingInfoPropertyIsLiveStream),
+        ("MPNowPlayingInfoPropertyAvailableLanguageOptions", MPNowPlayingInfoPropertyAvailableLanguageOptions),
+        ("MPNowPlayingInfoPropertyCurrentLanguageOptions", MPNowPlayingInfoPropertyCurrentLanguageOptions),
+        ("MPNowPlayingInfoCollectionIdentifier", MPNowPlayingInfoCollectionIdentifier),
+        ("MPNowPlayingInfoPropertyExternalContentIdentifier", MPNowPlayingInfoPropertyExternalContentIdentifier),
+        ("MPNowPlayingInfoPropertyExternalUserProfileIdentifier", MPNowPlayingInfoPropertyExternalUserProfileIdentifier),
+        ("MPNowPlayingInfoPropertyServiceIdentifier", MPNowPlayingInfoPropertyServiceIdentifier),
+        ("MPNowPlayingInfoPropertyPlaybackProgress", MPNowPlayingInfoPropertyPlaybackProgress),
+        ("MPNowPlayingInfoPropertyMediaType", MPNowPlayingInfoPropertyMediaType),
+        ("MPNowPlayingInfoPropertyAssetURL", MPNowPlayingInfoPropertyAssetURL),
+        ("MPNowPlayingInfoPropertyCurrentPlaybackDate", MPNowPlayingInfoPropertyCurrentPlaybackDate),
+    ]
+    if #available(macOS 13.0, *) {
+        keys.append(("MPNowPlayingInfoPropertyCreditsStartTime", MPNowPlayingInfoPropertyCreditsStartTime))
+    }
+    if #available(macOS 15.0, *) {
+        keys.append(("MPNowPlayingInfoPropertyInternationalStandardRecordingCode", MPNowPlayingInfoPropertyInternationalStandardRecordingCode))
+        keys.append(("MPNowPlayingInfoPropertyExcludeFromSuggestions", MPNowPlayingInfoPropertyExcludeFromSuggestions))
+    }
+    if #available(macOS 26.0, *) {
+        keys.append(("MPNowPlayingInfoProperty1x1AnimatedArtwork", MPNowPlayingInfoProperty1x1AnimatedArtwork))
+        keys.append(("MPNowPlayingInfoProperty3x4AnimatedArtwork", MPNowPlayingInfoProperty3x4AnimatedArtwork))
+    }
+    return keys
+}
+
+private func mpObjectValuedNowPlayingKeys() -> Set<String> {
+    var keys: Set<String> = [
+        MPMediaItemPropertyArtwork,
+        MPNowPlayingInfoPropertyAvailableLanguageOptions,
+        MPNowPlayingInfoPropertyCurrentLanguageOptions,
+    ]
+    if #available(macOS 26.0, *) {
+        keys.insert(MPNowPlayingInfoProperty1x1AnimatedArtwork)
+        keys.insert(MPNowPlayingInfoProperty3x4AnimatedArtwork)
+    }
+    return keys
+}
+
+private func mpResolveNowPlayingKey(_ name: String) -> String? {
+    let keys = mpNamedNowPlayingKeys()
+    if let entry = keys.first(where: { $0.name == name }) {
+        return entry.key
+    }
+    return keys.first(where: { $0.key == name })?.key
+}
+
+private func mpNowPlayingKeyName(_ key: String) -> String {
+    if key == MPMediaItemPropertyPersistentID {
+        return "MPMediaItemPropertyPersistentID"
+    }
+    return mpNamedNowPlayingKeys().first(where: { $0.key == key })?.name ?? key
+}
+
+private let mpLanguageOptionCharacteristics: [String: String] = [
+    "MPLanguageOptionCharacteristicIsMainProgramContent": MPLanguageOptionCharacteristicIsMainProgramContent,
+    "MPLanguageOptionCharacteristicIsAuxiliaryContent": MPLanguageOptionCharacteristicIsAuxiliaryContent,
+    "MPLanguageOptionCharacteristicContainsOnlyForcedSubtitles": MPLanguageOptionCharacteristicContainsOnlyForcedSubtitles,
+    "MPLanguageOptionCharacteristicTranscribesSpokenDialog": MPLanguageOptionCharacteristicTranscribesSpokenDialog,
+    "MPLanguageOptionCharacteristicDescribesMusicAndSound": MPLanguageOptionCharacteristicDescribesMusicAndSound,
+    "MPLanguageOptionCharacteristicEasyToRead": MPLanguageOptionCharacteristicEasyToRead,
+    "MPLanguageOptionCharacteristicDescribesVideo": MPLanguageOptionCharacteristicDescribesVideo,
+    "MPLanguageOptionCharacteristicLanguageTranslation": MPLanguageOptionCharacteristicLanguageTranslation,
+    "MPLanguageOptionCharacteristicDubbedTranslation": MPLanguageOptionCharacteristicDubbedTranslation,
+    "MPLanguageOptionCharacteristicVoiceOverTranslation": MPLanguageOptionCharacteristicVoiceOverTranslation,
+]
+
+let MP_NOW_PLAYING_OK: Int32 = 0
+let MP_NOW_PLAYING_UNKNOWN_KEY: Int32 = 1
+let MP_NOW_PLAYING_OBJECT_KEY: Int32 = 2
+let MP_NOW_PLAYING_INVALID_VALUE: Int32 = 3
+
+@_cdecl("mp_now_playing_info_box_set_named")
+public func mp_now_playing_info_box_set_named(
+    _ info: UnsafeMutableRawPointer?,
+    _ keyName: UnsafePointer<CChar>?,
+    _ kind: Int32,
+    _ stringValue: UnsafePointer<CChar>?,
+    _ doubleValue: Double,
+    _ int64Value: Int64,
+    _ uint64Value: UInt64
+) -> Int32 {
+    guard let info, let keyName else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard let key = mpResolveNowPlayingKey(String(cString: keyName)) else {
+        return MP_NOW_PLAYING_UNKNOWN_KEY
+    }
+    guard !mpObjectValuedNowPlayingKeys().contains(key) else { return MP_NOW_PLAYING_OBJECT_KEY }
+    let value: Any
+    switch kind {
+    case 0:
+        guard let stringValue else { return MP_NOW_PLAYING_INVALID_VALUE }
+        value = String(cString: stringValue)
+    case 1:
+        value = NSNumber(value: doubleValue)
+    case 2:
+        value = NSNumber(value: int64Value)
+    case 3:
+        value = NSNumber(value: uint64Value)
+    case 4:
+        value = NSNumber(value: int64Value != 0)
+    case 5:
+        value = Date(timeIntervalSince1970: doubleValue)
+    case 6:
+        guard let stringValue, let url = URL(string: String(cString: stringValue)) else {
+            return MP_NOW_PLAYING_INVALID_VALUE
+        }
+        value = url
+    default:
+        return MP_NOW_PLAYING_INVALID_VALUE
+    }
+    let box: MPNowPlayingInfoBox = mpBorrow(info)
+    box.info[key] = value
+    return MP_NOW_PLAYING_OK
+}
+
+final class MPNowPlayingSnapshot: NSObject {
+    let entries: [(name: String, value: Any)]
+
+    init(info: [String: Any]) {
+        entries = info
+            .map { (name: mpNowPlayingKeyName($0.key), value: $0.value) }
+            .sorted { $0.name < $1.name }
+    }
+
+    func entry(_ index: Int) -> Any? {
+        guard index >= 0, index < entries.count else { return nil }
+        return entries[index].value
+    }
+}
+
+private func mpSnapshotKind(_ value: Any) -> Int32 {
+    if value is String {
+        return 0
+    }
+    if let number = value as? NSNumber {
+        if CFGetTypeID(number) == CFBooleanGetTypeID() {
+            return 4
+        }
+        if CFNumberIsFloatType(number) {
+            return 1
+        }
+        return String(cString: number.objCType) == "Q" ? 3 : 2
+    }
+    if value is Date {
+        return 5
+    }
+    if value is URL {
+        return 6
+    }
+    return 7
+}
+
+@_cdecl("mp_now_playing_info_snapshot")
+public func mp_now_playing_info_snapshot() -> UnsafeMutableRawPointer? {
+    guard let info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return nil }
+    return mpRetain(MPNowPlayingSnapshot(info: info))
+}
+
+@_cdecl("mp_now_playing_snapshot_release")
+public func mp_now_playing_snapshot_release(_ snapshot: UnsafeMutableRawPointer?) {
+    guard let snapshot else { return }
+    mpRelease(snapshot)
+}
+
+@_cdecl("mp_now_playing_snapshot_count")
+public func mp_now_playing_snapshot_count(_ snapshot: UnsafeMutableRawPointer?) -> Int {
+    guard let snapshot else { return 0 }
+    let box: MPNowPlayingSnapshot = mpBorrow(snapshot)
+    return box.entries.count
+}
+
+@_cdecl("mp_now_playing_snapshot_copy_key")
+public func mp_now_playing_snapshot_copy_key(
+    _ snapshot: UnsafeMutableRawPointer?,
+    _ index: Int
+) -> UnsafeMutablePointer<CChar>? {
+    guard let snapshot else { return nil }
+    let box: MPNowPlayingSnapshot = mpBorrow(snapshot)
+    guard index >= 0, index < box.entries.count else { return nil }
+    return mpCString(box.entries[index].name)
+}
+
+@_cdecl("mp_now_playing_snapshot_kind")
+public func mp_now_playing_snapshot_kind(_ snapshot: UnsafeMutableRawPointer?, _ index: Int) -> Int32 {
+    guard let snapshot else { return -1 }
+    let box: MPNowPlayingSnapshot = mpBorrow(snapshot)
+    guard let value = box.entry(index) else { return -1 }
+    return mpSnapshotKind(value)
+}
+
+@_cdecl("mp_now_playing_snapshot_copy_string")
+public func mp_now_playing_snapshot_copy_string(
+    _ snapshot: UnsafeMutableRawPointer?,
+    _ index: Int
+) -> UnsafeMutablePointer<CChar>? {
+    guard let snapshot else { return nil }
+    let box: MPNowPlayingSnapshot = mpBorrow(snapshot)
+    guard let value = box.entry(index) else { return nil }
+    if let string = value as? String {
+        return mpCString(string)
+    }
+    if let url = value as? URL {
+        return mpCString(url.absoluteString)
+    }
+    return mpCString(String(describing: type(of: value)))
+}
+
+@_cdecl("mp_now_playing_snapshot_double")
+public func mp_now_playing_snapshot_double(_ snapshot: UnsafeMutableRawPointer?, _ index: Int) -> Double {
+    guard let snapshot else { return .nan }
+    let box: MPNowPlayingSnapshot = mpBorrow(snapshot)
+    switch box.entry(index) {
+    case let number as NSNumber:
+        return number.doubleValue
+    case let date as Date:
+        return date.timeIntervalSince1970
+    default:
+        return .nan
+    }
+}
+
+@_cdecl("mp_now_playing_snapshot_int64")
+public func mp_now_playing_snapshot_int64(_ snapshot: UnsafeMutableRawPointer?, _ index: Int) -> Int64 {
+    guard let snapshot else { return 0 }
+    let box: MPNowPlayingSnapshot = mpBorrow(snapshot)
+    return (box.entry(index) as? NSNumber)?.int64Value ?? 0
+}
+
+@_cdecl("mp_now_playing_snapshot_uint64")
+public func mp_now_playing_snapshot_uint64(_ snapshot: UnsafeMutableRawPointer?, _ index: Int) -> UInt64 {
+    guard let snapshot else { return 0 }
+    let box: MPNowPlayingSnapshot = mpBorrow(snapshot)
+    return (box.entry(index) as? NSNumber)?.uint64Value ?? 0
 }
 
 private func mpCStringArray(
@@ -228,7 +512,7 @@ public func mp_now_playing_info_box_set_animated_artwork(
     _ keyId: Int32,
     _ artworkPtr: UnsafeMutableRawPointer?
 ) {
-    guard #available(macOS 16.0, *), let info, let artworkPtr, let key = mpNowPlayingDictionaryKey(keyId) else {
+    guard #available(macOS 26.0, *), let info, let artworkPtr, let key = mpNowPlayingDictionaryKey(keyId) else {
         return
     }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
@@ -300,12 +584,12 @@ public func mp_now_playing_set_playback_state(_ state: Int32) {
 @_cdecl("mp_now_playing_get_playback_state")
 public func mp_now_playing_get_playback_state() -> Int32 {
     guard #available(macOS 10.12.2, *) else { return 0 }
-    return Int32(MPNowPlayingInfoCenter.default().playbackState.rawValue)
+    return Int32(clamping: MPNowPlayingInfoCenter.default().playbackState.rawValue)
 }
 
 @_cdecl("mp_now_playing_copy_supported_animated_artwork_keys")
 public func mp_now_playing_copy_supported_animated_artwork_keys() -> UnsafeMutablePointer<CChar>? {
-    if #available(macOS 16.0, *) {
+    if #available(macOS 26.0, *) {
         return mpCString(MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys.joined(separator: "\n"))
     }
     return mpCString("")
@@ -320,7 +604,8 @@ public func mp_language_option_new(
     _ displayName: UnsafePointer<CChar>?,
     _ identifier: UnsafePointer<CChar>?
 ) -> UnsafeMutableRawPointer? {
-    guard let optionType = MPNowPlayingInfoLanguageOptionType(rawValue: UInt(optionType)),
+    guard let rawOptionType = UInt(exactly: optionType),
+          let optionType = MPNowPlayingInfoLanguageOptionType(rawValue: rawOptionType),
           let displayName,
           let identifier
     else {
@@ -330,7 +615,9 @@ public func mp_language_option_new(
     let option = MPNowPlayingInfoLanguageOption(
         type: optionType,
         languageTag: languageTag.map { String(cString: $0) } ?? "",
-        characteristics: mpCStringArray(characteristics, count: characteristicsCount),
+        characteristics: mpCStringArray(characteristics, count: characteristicsCount).map {
+            mpLanguageOptionCharacteristics[$0] ?? $0
+        },
         displayName: String(cString: displayName),
         identifier: String(cString: identifier)
     )
@@ -347,7 +634,7 @@ public func mp_language_option_release(_ option: UnsafeMutableRawPointer?) {
 public func mp_language_option_get_type(_ option: UnsafeMutableRawPointer?) -> Int32 {
     guard let option else { return -1 }
     let languageOption: MPNowPlayingInfoLanguageOption = mpBorrow(option)
-    return Int32(languageOption.languageOptionType.rawValue)
+    return Int32(clamping: languageOption.languageOptionType.rawValue)
 }
 
 @_cdecl("mp_language_option_copy_language_tag")
@@ -454,7 +741,7 @@ public func mp_language_option_group_get_default_index(_ group: UnsafeMutableRaw
     if let index = languageOptionGroup.languageOptions.firstIndex(where: { option in
         option === defaultOption || option.identifier == defaultOption.identifier
     }) {
-        return Int32(index)
+        return Int32(clamping: index)
     }
 
     return -1

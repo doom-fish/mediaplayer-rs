@@ -78,6 +78,50 @@ impl Artwork {
         }
     }
 
+    pub fn from_image_data(
+        data: &[u8],
+        bounds_size: Option<CGSize>,
+    ) -> Result<Self, MediaPlayerError> {
+        if data.is_empty() {
+            return Err(MediaPlayerError::InvalidArgument(
+                "artwork image data is empty".to_string(),
+            ));
+        }
+        let (width, height) = match bounds_size {
+            Some(size) => {
+                validate_size(size)?;
+                (size.width, size.height)
+            }
+            None => (0.0, 0.0),
+        };
+        let ptr =
+            unsafe { ffi::mp_artwork_new_from_data(data.as_ptr(), data.len(), width, height) };
+        if ptr.is_null() {
+            Err(MediaPlayerError::Framework(
+                "artwork image data could not be decoded".to_string(),
+            ))
+        } else {
+            Ok(Self { ptr })
+        }
+    }
+
+    pub fn image_png_data(&self, size: CGSize) -> Result<Vec<u8>, MediaPlayerError> {
+        validate_size(size)?;
+        let mut length = 0_usize;
+        let bytes = unsafe {
+            ffi::mp_artwork_copy_png_data(self.ptr, size.width, size.height, &raw mut length)
+        };
+        if bytes.is_null() {
+            return Err(MediaPlayerError::Framework(format!(
+                "artwork produced no image at {}x{}",
+                size.width, size.height
+            )));
+        }
+        let png = unsafe { std::slice::from_raw_parts(bytes, length) }.to_vec();
+        unsafe { ffi::mp_bytes_free(bytes) };
+        Ok(png)
+    }
+
     /// Returns the full artwork bounds reported by the framework.
     #[must_use]
     pub fn bounds(&self) -> Option<CGRect> {
@@ -97,6 +141,18 @@ impl Artwork {
         };
 
         ok.then_some(CGRect::new(origin_x, origin_y, width, height))
+    }
+}
+
+fn validate_size(size: CGSize) -> Result<(), MediaPlayerError> {
+    let usable = |value: f64| (1.0..=16_384.0).contains(&value);
+    if usable(size.width) && usable(size.height) {
+        Ok(())
+    } else {
+        Err(MediaPlayerError::InvalidArgument(format!(
+            "artwork size {}x{} must be between 1 and 16384 points per side",
+            size.width, size.height
+        )))
     }
 }
 

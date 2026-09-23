@@ -1,6 +1,7 @@
 //! Wrapper for `MPNowPlayingInfoCenter` and related now-playing metadata types.
 
-use core::ffi::c_void;
+use core::ffi::{c_char, c_void};
+use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -328,6 +329,19 @@ impl Drop for LanguageOptionGroup {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum NowPlayingValue {
+    String(String),
+    Double(f64),
+    Integer(i64),
+    UnsignedInteger(u64),
+    Bool(bool),
+    Date(SystemTime),
+    Url(String),
+    Other(String),
+}
+
 #[derive(Debug, Clone, Default)]
 /// Metadata pushed to `MPNowPlayingInfoCenter.nowPlayingInfo`.
 pub struct NowPlayingInfo {
@@ -358,6 +372,7 @@ pub struct NowPlayingInfo {
     pub exclude_from_suggestions: Option<bool>,
     pub animated_artwork_1x1: Option<AnimatedArtwork>,
     pub animated_artwork_3x4: Option<AnimatedArtwork>,
+    pub values: BTreeMap<String, NowPlayingValue>,
 }
 
 impl NowPlayingInfo {
@@ -529,6 +544,12 @@ impl NowPlayingInfo {
     }
 
     #[must_use]
+    pub fn value(mut self, key: impl Into<String>, value: NowPlayingValue) -> Self {
+        self.values.insert(key.into(), value);
+        self
+    }
+
+    #[must_use]
     pub fn animated_artwork_3x4(mut self, artwork: AnimatedArtwork) -> Self {
         self.animated_artwork_3x4 = Some(artwork);
         self
@@ -547,26 +568,45 @@ impl NowPlayingInfoCenter {
         Self { _private: () }
     }
 
-    pub fn set_now_playing_info(&self, info: &NowPlayingInfo) {
-        self.set_now_playing_info_with_artwork(info, None);
+    pub fn set_now_playing_info(&self, info: &NowPlayingInfo) -> Result<(), MediaPlayerError> {
+        self.set_now_playing_info_with_artwork(info, None)
     }
 
-    #[allow(clippy::too_many_lines)]
     pub fn set_now_playing_info_with_artwork(
         &self,
         info: &NowPlayingInfo,
         artwork: Option<&Artwork>,
-    ) {
+    ) -> Result<(), MediaPlayerError> {
         let info_box = unsafe { ffi::mp_now_playing_info_box_new() };
         if info_box.is_null() {
-            return;
+            return Err(MediaPlayerError::Framework(
+                "failed to allocate a now-playing info dictionary".to_string(),
+            ));
         }
+        let filled = unsafe { Self::fill_info_box(info_box, info, artwork) };
+        unsafe {
+            if filled.is_ok() {
+                ffi::mp_now_playing_apply_info_box(info_box);
+            }
+            ffi::mp_now_playing_info_box_release(info_box);
+        }
+        filled
+    }
 
-        let mk = |value: &str| CString::new(value).unwrap_or_default();
+    #[allow(clippy::too_many_lines)]
+    unsafe fn fill_info_box(
+        info_box: *mut c_void,
+        info: &NowPlayingInfo,
+        artwork: Option<&Artwork>,
+    ) -> Result<(), MediaPlayerError> {
+        let mk = |value: &str| {
+            CString::new(value)
+                .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))
+        };
 
         unsafe {
             if let Some(value) = info.title.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::Title as i32,
@@ -574,7 +614,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.artist.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::Artist as i32,
@@ -582,7 +622,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.album_title.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::AlbumTitle as i32,
@@ -653,7 +693,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.collection_identifier.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::CollectionIdentifier as i32,
@@ -661,7 +701,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.external_content_identifier.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::ExternalContentIdentifier as i32,
@@ -669,7 +709,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.external_user_profile_identifier.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::ExternalUserProfileIdentifier as i32,
@@ -677,7 +717,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.service_identifier.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::ServiceIdentifier as i32,
@@ -699,7 +739,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.asset_url.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_url(
                     info_box,
                     NowPlayingKey::AssetURL as i32,
@@ -721,7 +761,7 @@ impl NowPlayingInfoCenter {
                 );
             }
             if let Some(value) = info.international_standard_recording_code.as_deref() {
-                let value = mk(value);
+                let value = mk(value)?;
                 ffi::mp_now_playing_info_box_set_string(
                     info_box,
                     NowPlayingKey::InternationalStandardRecordingCode as i32,
@@ -776,9 +816,57 @@ impl NowPlayingInfoCenter {
                     option_ptrs.len(),
                 );
             }
-            ffi::mp_now_playing_apply_info_box(info_box);
-            ffi::mp_now_playing_info_box_release(info_box);
+            for (key, value) in &info.values {
+                set_named_value(info_box, key, value)?;
+            }
         }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn now_playing_info(&self) -> Option<BTreeMap<String, NowPlayingValue>> {
+        let snapshot = unsafe { ffi::mp_now_playing_info_snapshot() };
+        if snapshot.is_null() {
+            return None;
+        }
+        let count = unsafe { ffi::mp_now_playing_snapshot_count(snapshot) };
+        let values = (0..count)
+            .filter_map(|index| unsafe {
+                let key = unsupported::take_string(ffi::mp_now_playing_snapshot_copy_key(
+                    snapshot, index,
+                ))?;
+                let copy_string = || {
+                    unsupported::take_string(ffi::mp_now_playing_snapshot_copy_string(
+                        snapshot, index,
+                    ))
+                    .unwrap_or_default()
+                };
+                let value = match ffi::mp_now_playing_snapshot_kind(snapshot, index) {
+                    0 => NowPlayingValue::String(copy_string()),
+                    1 => NowPlayingValue::Double(ffi::mp_now_playing_snapshot_double(
+                        snapshot, index,
+                    )),
+                    2 => NowPlayingValue::Integer(ffi::mp_now_playing_snapshot_int64(
+                        snapshot, index,
+                    )),
+                    3 => NowPlayingValue::UnsignedInteger(ffi::mp_now_playing_snapshot_uint64(
+                        snapshot, index,
+                    )),
+                    4 => NowPlayingValue::Bool(
+                        ffi::mp_now_playing_snapshot_int64(snapshot, index) != 0,
+                    ),
+                    5 => NowPlayingValue::Date(unix_seconds_to_system_time(
+                        ffi::mp_now_playing_snapshot_double(snapshot, index),
+                    )?),
+                    6 => NowPlayingValue::Url(copy_string()),
+                    kind if kind >= 0 => NowPlayingValue::Other(copy_string()),
+                    _ => return None,
+                };
+                Some((key, value))
+            })
+            .collect();
+        unsafe { ffi::mp_now_playing_snapshot_release(snapshot) };
+        Some(values)
     }
 
     pub fn clear(&self) {
@@ -849,6 +937,78 @@ fn system_time_to_unix_seconds(value: SystemTime) -> f64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs_f64()
+}
+
+fn signed_unix_seconds(value: SystemTime) -> f64 {
+    match value.duration_since(UNIX_EPOCH) {
+        Ok(after) => after.as_secs_f64(),
+        Err(before) => -before.duration().as_secs_f64(),
+    }
+}
+
+fn unix_seconds_to_system_time(seconds: f64) -> Option<SystemTime> {
+    let offset = Duration::try_from_secs_f64(seconds.abs()).ok()?;
+    if seconds < 0.0 {
+        UNIX_EPOCH.checked_sub(offset)
+    } else {
+        UNIX_EPOCH.checked_add(offset)
+    }
+}
+
+unsafe fn set_named_value(
+    info_box: *mut c_void,
+    key: &str,
+    value: &NowPlayingValue,
+) -> Result<(), MediaPlayerError> {
+    let invalid = |error: std::ffi::NulError| MediaPlayerError::InvalidArgument(error.to_string());
+    let key_name = CString::new(key).map_err(invalid)?;
+    let mut text = None;
+    let (kind, double, int64, uint64) = match value {
+        NowPlayingValue::String(value) => {
+            text = Some(CString::new(value.as_str()).map_err(invalid)?);
+            (0, 0.0, 0, 0)
+        }
+        NowPlayingValue::Double(value) => (1, *value, 0, 0),
+        NowPlayingValue::Integer(value) => (2, 0.0, *value, 0),
+        NowPlayingValue::UnsignedInteger(value) => (3, 0.0, 0, *value),
+        NowPlayingValue::Bool(value) => (4, 0.0, i64::from(*value), 0),
+        NowPlayingValue::Date(value) => (5, signed_unix_seconds(*value), 0, 0),
+        NowPlayingValue::Url(value) => {
+            text = Some(CString::new(value.as_str()).map_err(invalid)?);
+            (6, 0.0, 0, 0)
+        }
+        NowPlayingValue::Other(_) => {
+            return Err(MediaPlayerError::InvalidArgument(format!(
+                "{key}: NowPlayingValue::Other is read-only"
+            )))
+        }
+    };
+    let text_ptr: *const c_char = text
+        .as_ref()
+        .map_or(std::ptr::null(), |value| value.as_ptr());
+    let status = unsafe {
+        ffi::mp_now_playing_info_box_set_named(
+            info_box,
+            key_name.as_ptr(),
+            kind,
+            text_ptr,
+            double,
+            int64,
+            uint64,
+        )
+    };
+    match status {
+        0 => Ok(()),
+        1 => Err(MediaPlayerError::InvalidArgument(format!(
+            "{key} is not a now-playing key available on this system"
+        ))),
+        2 => Err(MediaPlayerError::InvalidArgument(format!(
+            "{key} holds an object; set it through the typed NowPlayingInfo fields or artwork"
+        ))),
+        _ => Err(MediaPlayerError::InvalidArgument(format!(
+            "{key}: the value is not valid for this key"
+        ))),
+    }
 }
 
 #[cfg(test)]

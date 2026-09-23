@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use mediaplayer::prelude::*;
 
-fn main() {
+fn main() -> Result<(), MediaPlayerError> {
     println!("== mediaplayer smoke ==");
 
     // ── Now Playing ──────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ fn main() {
         .playback_rate(1.0)
         .media_type(NowPlayingMediaType::Audio);
 
-    center.set_now_playing_info(&info);
+    center.set_now_playing_info(&info)?;
     center.set_playback_state(PlaybackState::Playing);
 
     println!(
@@ -36,27 +36,27 @@ fn main() {
     let _play_token = rcc.on_play(|event| {
         println!("▶️  play received  ts={:.3}", event.timestamp);
         HandlerStatus::Success
-    });
+    })?;
 
     let _pause_token = rcc.on_pause(|event| {
         println!("⏸  pause received  ts={:.3}", event.timestamp);
         HandlerStatus::Success
-    });
+    })?;
 
     let _toggle_token = rcc.on_toggle_play_pause(|event| {
         println!("⏯  toggle play/pause  ts={:.3}", event.timestamp);
         HandlerStatus::Success
-    });
+    })?;
 
     let _next_token = rcc.on_next_track(|event| {
         println!("⏭  next track  ts={:.3}", event.timestamp);
         HandlerStatus::Success
-    });
+    })?;
 
     let _prev_token = rcc.on_previous_track(|event| {
         println!("⏮  previous track  ts={:.3}", event.timestamp);
         HandlerStatus::Success
-    });
+    })?;
 
     println!("Now Playing set. Remote command handlers registered.");
     println!("Waiting 1 s for any system delivery…");
@@ -68,4 +68,5 @@ fn main() {
 
     center.clear();
     println!("✅ mediaplayer now playing OK");
+    Ok(())
 }

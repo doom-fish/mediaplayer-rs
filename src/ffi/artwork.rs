@@ -17,6 +17,19 @@ extern "C" {
         height: *mut c_double,
     ) -> c_int;
     pub fn mp_artwork_release(artwork: *mut c_void);
+    pub fn mp_artwork_new_from_data(
+        bytes: *const u8,
+        length: usize,
+        width: c_double,
+        height: c_double,
+    ) -> *mut c_void;
+    pub fn mp_artwork_copy_png_data(
+        artwork: *mut c_void,
+        width: c_double,
+        height: c_double,
+        out_length: *mut usize,
+    ) -> *mut u8;
+    pub fn mp_bytes_free(bytes: *mut u8);
 
     pub fn mp_animated_artwork_new_from_files(
         artwork_id: *const c_char,

@@ -41,7 +41,7 @@ pub use media_query::MediaQuery;
 pub use music_player::MusicPlayer;
 pub use now_playing::{
     LanguageOption, LanguageOptionGroup, LanguageOptionType, NowPlayingInfo, NowPlayingInfoCenter,
-    NowPlayingMediaType, PlaybackState,
+    NowPlayingMediaType, NowPlayingValue, PlaybackState,
 };
 pub use playable_content_data_source::PlayableContentDataSource;
 pub use remote_commands::{
@@ -65,7 +65,7 @@ pub mod prelude {
     pub use crate::music_player::MusicPlayer;
     pub use crate::now_playing::{
         LanguageOption, LanguageOptionGroup, LanguageOptionType, NowPlayingInfo,
-        NowPlayingInfoCenter, NowPlayingMediaType, PlaybackState,
+        NowPlayingInfoCenter, NowPlayingMediaType, NowPlayingValue, PlaybackState,
     };
     pub use crate::playable_content_data_source::PlayableContentDataSource;
     pub use crate::remote_commands::{

@@ -36,6 +36,24 @@ extern "C" {
         count: usize,
     );
     pub fn mp_now_playing_apply_info_box(info: *mut c_void);
+    pub fn mp_now_playing_info_box_set_named(
+        info: *mut c_void,
+        key_name: *const c_char,
+        kind: c_int,
+        string_value: *const c_char,
+        double_value: c_double,
+        int64_value: i64,
+        uint64_value: u64,
+    ) -> c_int;
+    pub fn mp_now_playing_info_snapshot() -> *mut c_void;
+    pub fn mp_now_playing_snapshot_release(snapshot: *mut c_void);
+    pub fn mp_now_playing_snapshot_count(snapshot: *mut c_void) -> usize;
+    pub fn mp_now_playing_snapshot_copy_key(snapshot: *mut c_void, index: usize) -> *mut c_char;
+    pub fn mp_now_playing_snapshot_kind(snapshot: *mut c_void, index: usize) -> c_int;
+    pub fn mp_now_playing_snapshot_copy_string(snapshot: *mut c_void, index: usize) -> *mut c_char;
+    pub fn mp_now_playing_snapshot_double(snapshot: *mut c_void, index: usize) -> c_double;
+    pub fn mp_now_playing_snapshot_int64(snapshot: *mut c_void, index: usize) -> i64;
+    pub fn mp_now_playing_snapshot_uint64(snapshot: *mut c_void, index: usize) -> u64;
 
     pub fn mp_now_playing_clear();
     pub fn mp_now_playing_set_playback_state(state: c_int);
