@@ -32,3 +32,21 @@ public func mp_object_retain(_ ptr: UnsafeMutableRawPointer?) -> UnsafeMutableRa
     let object = Unmanaged<AnyObject>.fromOpaque(ptr).takeUnretainedValue()
     return mpRetain(object)
 }
+
+public typealias MPContextReleaseCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
+
+final class MPCallbackContextOwner: @unchecked Sendable {
+    let pointer: UnsafeMutableRawPointer?
+    private let release: MPContextReleaseCallback?
+
+    init(pointer: UnsafeMutableRawPointer?, release: MPContextReleaseCallback?) {
+        self.pointer = pointer
+        self.release = release
+    }
+
+    deinit {
+        if let pointer, let release {
+            release(pointer)
+        }
+    }
+}

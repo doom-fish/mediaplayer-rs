@@ -64,11 +64,13 @@ private func mpJoinedNumbers(_ values: [NSNumber]) -> UnsafeMutablePointer<CChar
 public func mp_remote_command_add_handler(
     _ commandId: Int32,
     _ callback: MPCommandCallback?,
-    _ refcon: UnsafeMutableRawPointer?
+    _ refcon: UnsafeMutableRawPointer?,
+    _ releaseRefcon: MPContextReleaseCallback?
 ) -> UnsafeMutableRawPointer? {
+    let owner = MPCallbackContextOwner(pointer: refcon, release: releaseRefcon)
     guard let callback, let command = mpRemoteCommand(for: commandId) else { return nil }
 
-    let token = command.addTarget { event in
+    let token = command.addTarget { [owner] event in
         var extra = Double.nan
         var seekType: Int32 = -1
         var rating = Double.nan
@@ -85,7 +87,7 @@ public func mp_remote_command_add_handler(
             extra = skipEvent.interval
         }
         if let seekEvent = event as? MPSeekCommandEvent {
-            seekType = Int32(seekEvent.type.rawValue)
+            seekType = Int32(clamping: seekEvent.type.rawValue)
         }
         if let positionEvent = event as? MPChangePlaybackPositionCommandEvent {
             extra = positionEvent.positionTime
@@ -100,34 +102,36 @@ public func mp_remote_command_add_handler(
             negative = feedbackEvent.isNegative ? 1 : 0
         }
         if let shuffleEvent = event as? MPChangeShuffleModeCommandEvent {
-            shuffleType = Int32(shuffleEvent.shuffleType.rawValue)
+            shuffleType = Int32(clamping: shuffleEvent.shuffleType.rawValue)
             preservesShuffleMode = shuffleEvent.preservesShuffleMode ? 1 : 0
         }
         if let repeatEvent = event as? MPChangeRepeatModeCommandEvent {
-            repeatType = Int32(repeatEvent.repeatType.rawValue)
+            repeatType = Int32(clamping: repeatEvent.repeatType.rawValue)
             preservesRepeatMode = repeatEvent.preservesRepeatMode ? 1 : 0
         }
         if let languageEvent = event as? MPChangeLanguageOptionCommandEvent {
-            languageOptionPtr = mpRetain(languageEvent.languageOption)
-            languageOptionSetting = Int32(languageEvent.setting.rawValue)
+            languageOptionPtr = Unmanaged.passUnretained(languageEvent.languageOption).toOpaque()
+            languageOptionSetting = Int32(clamping: languageEvent.setting.rawValue)
         }
 
-        let rawStatus = callback(
-            refcon,
-            commandId,
-            event.timestamp,
-            extra,
-            seekType,
-            rating,
-            playbackRate,
-            negative,
-            shuffleType,
-            repeatType,
-            preservesShuffleMode,
-            preservesRepeatMode,
-            languageOptionPtr,
-            languageOptionSetting
-        )
+        let rawStatus = withExtendedLifetime(event) {
+            callback(
+                owner.pointer,
+                commandId,
+                event.timestamp,
+                extra,
+                seekType,
+                rating,
+                playbackRate,
+                negative,
+                shuffleType,
+                repeatType,
+                preservesShuffleMode,
+                preservesRepeatMode,
+                languageOptionPtr,
+                languageOptionSetting
+            )
+        }
         return MPRemoteCommandHandlerStatus(rawValue: Int(rawStatus)) ?? .commandFailed
     }
 
@@ -286,7 +290,7 @@ public func mp_change_shuffle_mode_get_current_shuffle_type(_ commandId: Int32) 
     guard let command = mpRemoteCommand(for: commandId) as? MPChangeShuffleModeCommand else {
         return 0
     }
-    return Int32(command.currentShuffleType.rawValue)
+    return Int32(clamping: command.currentShuffleType.rawValue)
 }
 
 @_cdecl("mp_change_shuffle_mode_set_current_shuffle_type")
@@ -307,7 +311,7 @@ public func mp_change_repeat_mode_get_current_repeat_type(_ commandId: Int32) ->
     guard let command = mpRemoteCommand(for: commandId) as? MPChangeRepeatModeCommand else {
         return 0
     }
-    return Int32(command.currentRepeatType.rawValue)
+    return Int32(clamping: command.currentRepeatType.rawValue)
 }
 
 @_cdecl("mp_change_repeat_mode_set_current_repeat_type")

@@ -24,6 +24,7 @@ extern "C" {
         command_id: c_int,
         callback: Option<MpCommandCallback>,
         refcon: *mut c_void,
+        release_refcon: Option<unsafe extern "C" fn(*mut c_void)>,
     ) -> *mut c_void;
     pub fn mp_remote_command_remove_handler(token: *mut c_void);
     pub fn mp_command_token_release(token: *mut c_void);

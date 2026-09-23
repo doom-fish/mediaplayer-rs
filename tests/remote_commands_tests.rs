@@ -1,5 +1,7 @@
+use std::sync::mpsc::{self, TryRecvError};
+
 use mediaplayer::{
-    HandlerStatus, RemoteCommandCenter, RepeatType, ShuffleType,
+    Command, HandlerStatus, RemoteCommandCenter, RepeatType, ShuffleType,
 };
 
 #[test]
@@ -47,9 +49,75 @@ fn remote_command_configuration_round_trips() {
     repeat.set_current_repeat_type(RepeatType::All);
     assert_eq!(repeat.current_repeat_type(), RepeatType::All);
 
-    let _play_token = play.add_handler(|_| HandlerStatus::Success);
-    let _bookmark_token = center.on_bookmark(|event| {
-        println!("bookmark event at {:.3}", event.timestamp);
-        HandlerStatus::Success
+    let _play_token = play
+        .add_handler(|_| HandlerStatus::Success)
+        .expect("play handler should register");
+    let _bookmark_token = center
+        .on_bookmark(|event| {
+            println!("bookmark event at {:.3}", event.timestamp);
+            HandlerStatus::Success
+        })
+        .expect("bookmark handler should register");
+}
+
+#[test]
+fn every_command_accepts_a_handler() {
+    let center = RemoteCommandCenter::shared();
+    let tokens = [
+        Command::Play,
+        Command::Pause,
+        Command::Stop,
+        Command::TogglePlayPause,
+        Command::NextTrack,
+        Command::PreviousTrack,
+        Command::SkipForward,
+        Command::SkipBackward,
+        Command::SeekForward,
+        Command::SeekBackward,
+        Command::ChangePlaybackPosition,
+        Command::EnableLanguageOption,
+        Command::DisableLanguageOption,
+        Command::ChangePlaybackRate,
+        Command::ChangeRepeatMode,
+        Command::ChangeShuffleMode,
+        Command::Rating,
+        Command::Like,
+        Command::Dislike,
+        Command::Bookmark,
+    ]
+    .map(|command| {
+        center
+            .add_handler(command, |_| HandlerStatus::Success)
+            .unwrap_or_else(|error| panic!("{command:?} should register: {error}"))
     });
+    assert_eq!(tokens.len(), 20);
+}
+
+#[test]
+fn dropping_a_command_token_releases_its_handler() {
+    let (sender, receiver) = mpsc::channel::<Command>();
+    let token = RemoteCommandCenter::shared()
+        .on_play(move |event| {
+            let _ = sender.send(event.command);
+            HandlerStatus::Success
+        })
+        .expect("play handler should register");
+    assert_eq!(receiver.try_recv(), Err(TryRecvError::Empty));
+    drop(token);
+    assert_eq!(receiver.try_recv(), Err(TryRecvError::Disconnected));
+}
+
+#[test]
+fn command_tokens_can_be_dropped_on_another_thread() {
+    let (sender, receiver) = mpsc::channel::<Command>();
+    let token = RemoteCommandCenter::shared()
+        .on_pause(move |event| {
+            let _ = sender.send(event.command);
+            HandlerStatus::Success
+        })
+        .expect("pause handler should register");
+    std::thread::spawn(move || drop(token))
+        .join()
+        .expect("token should drop on a secondary thread");
+    assert_eq!(receiver.try_recv(), Err(TryRecvError::Disconnected));
 }

@@ -4,10 +4,14 @@ use core::ffi::{c_char, c_double, c_int, c_void};
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::str::FromStr;
+use std::sync::{Mutex, PoisonError, TryLockError};
+
+use doom_fish_utils::callback_context::CallbackContext;
 
 use crate::ffi::{self, MpCommandCallback};
 use crate::now_playing::LanguageOption;
 use crate::unsupported;
+use crate::MediaPlayerError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(i32)]
@@ -180,8 +184,9 @@ pub struct CommandEvent {
     pub language_option_setting: Option<LanguageOptionSetting>,
 }
 
-type HandlerBox = Box<dyn FnMut(CommandEvent) -> HandlerStatus + Send>;
+type CommandHandler = Mutex<Box<dyn FnMut(CommandEvent) -> HandlerStatus + Send>>;
 
+#[allow(clippy::too_many_arguments)]
 unsafe extern "C" fn command_trampoline(
     refcon: *mut c_void,
     command_id: c_int,
@@ -198,71 +203,76 @@ unsafe extern "C" fn command_trampoline(
     language_option_ptr: *mut c_void,
     language_option_setting: c_int,
 ) -> c_int {
-    if refcon.is_null() {
-        return HandlerStatus::CommandFailed as i32;
-    }
-
-    let handler = &mut *(refcon.cast::<HandlerBox>());
-    let command = Command::from_id(command_id).unwrap_or(Command::Play);
-    let event = CommandEvent {
-        command,
-        timestamp,
-        skip_interval: matches!(command, Command::SkipForward | Command::SkipBackward)
-            .then_some(extra)
-            .filter(|value| !value.is_nan()),
-        seek_type: matches!(command, Command::SeekForward | Command::SeekBackward)
-            .then(|| SeekType::from_raw(seek_type))
-            .filter(|_| seek_type >= 0),
-        position: matches!(command, Command::ChangePlaybackPosition)
-            .then_some(extra)
-            .filter(|value| !value.is_nan()),
-        rating: (!rating.is_nan()).then_some(rating),
-        playback_rate: (!playback_rate.is_nan()).then_some(playback_rate),
-        feedback_negative: (negative >= 0).then_some(negative != 0),
-        shuffle_type: (shuffle_type >= 0).then(|| ShuffleType::from_raw(shuffle_type)),
-        repeat_type: (repeat_type >= 0).then(|| RepeatType::from_raw(repeat_type)),
-        preserves_shuffle_mode: (preserves_shuffle_mode >= 0).then_some(preserves_shuffle_mode != 0),
-        preserves_repeat_mode: (preserves_repeat_mode >= 0).then_some(preserves_repeat_mode != 0),
-        language_option: (!language_option_ptr.is_null())
-            .then(|| unsafe { LanguageOption::from_raw(language_option_ptr) }),
-        language_option_setting: (language_option_setting >= 0)
-            .then(|| LanguageOptionSetting::from_raw(language_option_setting)),
+    let status = unsafe {
+        CallbackContext::<CommandHandler>::with(
+            refcon,
+            "remote_commands::command_trampoline",
+            |handler| {
+                let mut handler = match handler.try_lock() {
+                    Ok(handler) => handler,
+                    Err(TryLockError::Poisoned(poisoned)) => PoisonError::into_inner(poisoned),
+                    Err(TryLockError::WouldBlock) => return HandlerStatus::CommandFailed,
+                };
+                let command = Command::from_id(command_id).unwrap_or(Command::Play);
+                let event = CommandEvent {
+                    command,
+                    timestamp,
+                    skip_interval: matches!(command, Command::SkipForward | Command::SkipBackward)
+                        .then_some(extra)
+                        .filter(|value| !value.is_nan()),
+                    seek_type: matches!(command, Command::SeekForward | Command::SeekBackward)
+                        .then(|| SeekType::from_raw(seek_type))
+                        .filter(|_| seek_type >= 0),
+                    position: matches!(command, Command::ChangePlaybackPosition)
+                        .then_some(extra)
+                        .filter(|value| !value.is_nan()),
+                    rating: (!rating.is_nan()).then_some(rating),
+                    playback_rate: (!playback_rate.is_nan()).then_some(playback_rate),
+                    feedback_negative: (negative >= 0).then_some(negative != 0),
+                    shuffle_type: (shuffle_type >= 0).then(|| ShuffleType::from_raw(shuffle_type)),
+                    repeat_type: (repeat_type >= 0).then(|| RepeatType::from_raw(repeat_type)),
+                    preserves_shuffle_mode: (preserves_shuffle_mode >= 0)
+                        .then_some(preserves_shuffle_mode != 0),
+                    preserves_repeat_mode: (preserves_repeat_mode >= 0)
+                        .then_some(preserves_repeat_mode != 0),
+                    language_option: (!language_option_ptr.is_null()).then(|| {
+                        LanguageOption::from_raw(ffi::mp_object_retain(language_option_ptr))
+                    }),
+                    language_option_setting: (language_option_setting >= 0)
+                        .then(|| LanguageOptionSetting::from_raw(language_option_setting)),
+                };
+                handler(event)
+            },
+        )
     };
-
-    // The user closure can panic; unwinding across the `extern "C"` boundary
-    // into Swift/MediaPlayer is undefined behaviour. Catch it and report a
-    // failed command status instead. This handler fires repeatedly for the
-    // lifetime of the registration, so every invocation must be guarded.
-    let mut status = HandlerStatus::CommandFailed as i32;
-    doom_fish_utils::panic_safe::catch_user_panic("remote_commands::command_trampoline", || {
-        status = handler(event) as i32;
-    });
-    status
+    status.unwrap_or(HandlerStatus::CommandFailed) as c_int
 }
 
 /// RAII guard that keeps a remote command handler registered.
 pub struct CommandToken {
     token_ptr: *mut c_void,
-    closure_ptr: *mut HandlerBox,
+    context: CallbackContext<CommandHandler>,
     _not_sync: PhantomData<*mut ()>,
 }
 
 // SAFETY: The token owns the registration and a `Send` Rust closure.
 unsafe impl Send for CommandToken {}
 
+impl std::fmt::Debug for CommandToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommandToken")
+            .field("token", &self.token_ptr)
+            .field("context", &self.context)
+            .finish()
+    }
+}
+
 impl Drop for CommandToken {
     fn drop(&mut self) {
-        if self.token_ptr.is_null() {
-            if !self.closure_ptr.is_null() {
-                unsafe { drop(Box::from_raw(self.closure_ptr)) }
-            }
-            return;
-        }
-
+        self.context.deactivate();
         unsafe {
             ffi::mp_remote_command_remove_handler(self.token_ptr);
             ffi::mp_command_token_release(self.token_ptr);
-            drop(Box::from_raw(self.closure_ptr));
         }
     }
 }
@@ -324,7 +334,7 @@ macro_rules! impl_command_common {
                 unsafe { ffi::mp_remote_command_set_enabled(self.command as i32, i32::from(enabled)) }
             }
 
-            pub fn add_handler<F>(&self, handler: F) -> CommandToken
+            pub fn add_handler<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
             where
                 F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
             {
@@ -600,147 +610,157 @@ impl RemoteCommandCenter {
         }
     }
 
-    pub fn add_handler<F>(&self, command: Command, handler: F) -> CommandToken
+    pub fn add_handler<F>(
+        &self,
+        command: Command,
+        handler: F,
+    ) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         register_handler(command, handler)
     }
 
-    pub fn on_play<F>(&self, handler: F) -> CommandToken
+    pub fn on_play<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.play_command().add_handler(handler)
     }
 
-    pub fn on_pause<F>(&self, handler: F) -> CommandToken
+    pub fn on_pause<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.pause_command().add_handler(handler)
     }
 
-    pub fn on_stop<F>(&self, handler: F) -> CommandToken
+    pub fn on_stop<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.stop_command().add_handler(handler)
     }
 
-    pub fn on_toggle_play_pause<F>(&self, handler: F) -> CommandToken
+    pub fn on_toggle_play_pause<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.toggle_play_pause_command().add_handler(handler)
     }
 
-    pub fn on_next_track<F>(&self, handler: F) -> CommandToken
+    pub fn on_next_track<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.next_track_command().add_handler(handler)
     }
 
-    pub fn on_previous_track<F>(&self, handler: F) -> CommandToken
+    pub fn on_previous_track<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.previous_track_command().add_handler(handler)
     }
 
-    pub fn on_skip_forward<F>(&self, handler: F) -> CommandToken
+    pub fn on_skip_forward<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.skip_forward_command().add_handler(handler)
     }
 
-    pub fn on_skip_backward<F>(&self, handler: F) -> CommandToken
+    pub fn on_skip_backward<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.skip_backward_command().add_handler(handler)
     }
 
-    pub fn on_seek_forward<F>(&self, handler: F) -> CommandToken
+    pub fn on_seek_forward<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.seek_forward_command().add_handler(handler)
     }
 
-    pub fn on_seek_backward<F>(&self, handler: F) -> CommandToken
+    pub fn on_seek_backward<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.seek_backward_command().add_handler(handler)
     }
 
-    pub fn on_change_playback_position<F>(&self, handler: F) -> CommandToken
+    pub fn on_change_playback_position<F>(
+        &self,
+        handler: F,
+    ) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.change_playback_position_command().add_handler(handler)
     }
 
-    pub fn on_enable_language_option<F>(&self, handler: F) -> CommandToken
+    pub fn on_enable_language_option<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.enable_language_option_command().add_handler(handler)
     }
 
-    pub fn on_disable_language_option<F>(&self, handler: F) -> CommandToken
+    pub fn on_disable_language_option<F>(
+        &self,
+        handler: F,
+    ) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.disable_language_option_command().add_handler(handler)
     }
 
-    pub fn on_change_playback_rate<F>(&self, handler: F) -> CommandToken
+    pub fn on_change_playback_rate<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.change_playback_rate_command().add_handler(handler)
     }
 
-    pub fn on_change_repeat_mode<F>(&self, handler: F) -> CommandToken
+    pub fn on_change_repeat_mode<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.change_repeat_mode_command().add_handler(handler)
     }
 
-    pub fn on_change_shuffle_mode<F>(&self, handler: F) -> CommandToken
+    pub fn on_change_shuffle_mode<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.change_shuffle_mode_command().add_handler(handler)
     }
 
-    pub fn on_rating<F>(&self, handler: F) -> CommandToken
+    pub fn on_rating<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.rating_command().add_handler(handler)
     }
 
-    pub fn on_like<F>(&self, handler: F) -> CommandToken
+    pub fn on_like<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.like_command().add_handler(handler)
     }
 
-    pub fn on_dislike<F>(&self, handler: F) -> CommandToken
+    pub fn on_dislike<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
         self.dislike_command().add_handler(handler)
     }
 
-    pub fn on_bookmark<F>(&self, handler: F) -> CommandToken
+    pub fn on_bookmark<F>(&self, handler: F) -> Result<CommandToken, MediaPlayerError>
     where
         F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
     {
@@ -748,26 +768,30 @@ impl RemoteCommandCenter {
     }
 }
 
-fn register_handler<F>(command: Command, handler: F) -> CommandToken
+fn register_handler<F>(command: Command, handler: F) -> Result<CommandToken, MediaPlayerError>
 where
     F: FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
 {
-    let boxed: Box<HandlerBox> = Box::new(Box::new(handler));
-    let closure_ptr = Box::into_raw(boxed);
-
+    let handler: CommandHandler = Mutex::new(Box::new(handler));
+    let context = CallbackContext::new(handler);
     let token_ptr = unsafe {
         ffi::mp_remote_command_add_handler(
             command as i32,
             Some(command_trampoline as MpCommandCallback),
-            closure_ptr.cast::<c_void>(),
+            context.retained_ptr(),
+            Some(CallbackContext::<CommandHandler>::RELEASE),
         )
     };
-
-    CommandToken {
-        token_ptr,
-        closure_ptr,
-        _not_sync: PhantomData,
+    if token_ptr.is_null() {
+        return Err(MediaPlayerError::Framework(format!(
+            "MPRemoteCommandCenter did not accept a handler for {command:?}"
+        )));
     }
+    Ok(CommandToken {
+        token_ptr,
+        context,
+        _not_sync: PhantomData,
+    })
 }
 
 fn copy_string(ptr: *mut c_char) -> String {
@@ -782,4 +806,173 @@ where
         .lines()
         .filter_map(|line| line.parse::<T>().ok())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use core::ffi::{c_int, c_void};
+    use std::ptr::null_mut;
+    use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+    use std::sync::mpsc::{self, TryRecvError};
+    use std::sync::{Arc, Mutex};
+
+    use doom_fish_utils::callback_context::CallbackContext;
+
+    use super::{command_trampoline, Command, CommandEvent, CommandHandler, HandlerStatus};
+    use crate::ffi;
+    use crate::now_playing::{LanguageOption, LanguageOptionType};
+
+    unsafe extern "C" {
+        fn CFGetRetainCount(object: *const c_void) -> isize;
+    }
+
+    fn context(
+        handler: impl FnMut(CommandEvent) -> HandlerStatus + Send + 'static,
+    ) -> CallbackContext<CommandHandler> {
+        CallbackContext::new(Mutex::new(Box::new(handler)))
+    }
+
+    unsafe fn deliver(
+        refcon: *mut c_void,
+        command: Command,
+        extra: f64,
+        language_option: *mut c_void,
+    ) -> c_int {
+        unsafe {
+            command_trampoline(
+                refcon,
+                command as c_int,
+                12.5,
+                extra,
+                -1,
+                f64::NAN,
+                f64::NAN,
+                -1,
+                -1,
+                -1,
+                -1,
+                -1,
+                language_option,
+                -1,
+            )
+        }
+    }
+
+    #[test]
+    fn trampoline_builds_the_event_and_returns_the_handler_status() {
+        let seen = Arc::new(Mutex::new(None));
+        let sink = Arc::clone(&seen);
+        let handler = context(move |event| {
+            *sink.lock().expect("sink lock") = Some((
+                event.command,
+                event.timestamp,
+                event.skip_interval,
+                event.position,
+            ));
+            HandlerStatus::NoActionableNowPlayingItem
+        });
+        let status = unsafe { deliver(handler.as_ptr(), Command::SkipForward, 15.0, null_mut()) };
+        assert_eq!(status, HandlerStatus::NoActionableNowPlayingItem as c_int);
+        assert_eq!(
+            *seen.lock().expect("seen lock"),
+            Some((Command::SkipForward, 12.5, Some(15.0), None))
+        );
+    }
+
+    #[test]
+    fn trampoline_skips_a_deactivated_context() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&calls);
+        let handler = context(move |_| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            HandlerStatus::Success
+        });
+        handler.deactivate();
+        let status = unsafe { deliver(handler.as_ptr(), Command::Play, f64::NAN, null_mut()) };
+        assert_eq!(status, HandlerStatus::CommandFailed as c_int);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn trampoline_fails_reentrant_delivery_instead_of_deadlocking() {
+        let refcon = Arc::new(AtomicPtr::new(null_mut()));
+        let target = Arc::clone(&refcon);
+        let nested = Arc::new(Mutex::new(None));
+        let sink = Arc::clone(&nested);
+        let handler = context(move |_| {
+            let status = unsafe {
+                deliver(
+                    target.load(Ordering::SeqCst),
+                    Command::Play,
+                    f64::NAN,
+                    null_mut(),
+                )
+            };
+            *sink.lock().expect("sink lock") = Some(status);
+            HandlerStatus::Success
+        });
+        refcon.store(handler.as_ptr(), Ordering::SeqCst);
+        let status = unsafe { deliver(handler.as_ptr(), Command::Play, f64::NAN, null_mut()) };
+        assert_eq!(status, HandlerStatus::Success as c_int);
+        assert_eq!(
+            *nested.lock().expect("nested lock"),
+            Some(HandlerStatus::CommandFailed as c_int)
+        );
+    }
+
+    #[test]
+    fn trampoline_retains_the_language_option_only_for_the_event() {
+        let option = LanguageOption::new(
+            LanguageOptionType::Legible,
+            Some("en"),
+            &[],
+            "English",
+            "subtitles-en",
+        )
+        .expect("language option should be created");
+        let raw = option.ptr as usize;
+        let before = unsafe { CFGetRetainCount(option.ptr.cast()) };
+        let during = Arc::new(Mutex::new(None));
+        let sink = Arc::clone(&during);
+        let handler = context(move |event| {
+            let identifier = event
+                .language_option
+                .as_ref()
+                .and_then(LanguageOption::identifier);
+            let retain_count = unsafe { CFGetRetainCount(raw as *const c_void) };
+            *sink.lock().expect("sink lock") = Some((identifier, retain_count));
+            HandlerStatus::Success
+        });
+        let status = unsafe {
+            deliver(
+                handler.as_ptr(),
+                Command::EnableLanguageOption,
+                f64::NAN,
+                option.ptr,
+            )
+        };
+        assert_eq!(status, HandlerStatus::Success as c_int);
+        assert_eq!(
+            *during.lock().expect("during lock"),
+            Some((Some("subtitles-en".to_string()), before + 1))
+        );
+        assert_eq!(unsafe { CFGetRetainCount(option.ptr.cast()) }, before);
+    }
+
+    #[test]
+    fn rejected_registration_releases_the_foreign_context_reference() {
+        let (sender, receiver) = mpsc::channel::<()>();
+        let witness = CallbackContext::new(Mutex::new(sender));
+        let token = unsafe {
+            ffi::mp_remote_command_add_handler(
+                -1,
+                Some(command_trampoline),
+                witness.retained_ptr(),
+                Some(CallbackContext::<Mutex<mpsc::Sender<()>>>::RELEASE),
+            )
+        };
+        assert!(token.is_null());
+        drop(witness);
+        assert_eq!(receiver.try_recv(), Err(TryRecvError::Disconnected));
+    }
 }

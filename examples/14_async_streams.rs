@@ -1,9 +1,10 @@
 //! Example: async streams smoke test.
 //!
-//! Demonstrates subscribing to `RemoteCommandStream`,
-//! `NowPlayingItemChangeStream`, and `NowPlayingSessionStream`.  Each
-//! subscription is created and immediately dropped to verify the
-//! subscribe → drop → EOF path works on a headless macOS machine.
+//! Demonstrates subscribing to `RemoteCommandStream` and shows that the
+//! notification and `NowPlayingSessionStream` constructors report
+//! `NotAvailable` on macOS.  Each remote-command subscription is created and
+//! immediately dropped to verify the subscribe → drop path works on a
+//! headless macOS machine.
 //!
 //! Run with:
 //! ```
@@ -33,37 +34,28 @@ fn run() {
     println!("=== mediaplayer async_api smoke test ===");
 
     // ── Notification streams ────────────────────────────────────────────────
-    {
-        let s = NowPlayingItemChangeStream::subscribe(8);
-        println!(
-            "[ok] NowPlayingItemChangeStream  buffered={} closed={}",
-            s.buffered_count(),
-            s.is_closed()
-        );
-    }
-    {
-        let s = PlaybackStateChangeStream::subscribe(8);
-        println!(
-            "[ok] PlaybackStateChangeStream   buffered={} closed={}",
-            s.buffered_count(),
-            s.is_closed()
-        );
-    }
-    {
-        let s = VolumeChangeStream::subscribe(8);
-        println!(
-            "[ok] VolumeChangeStream          buffered={} closed={}",
-            s.buffered_count(),
-            s.is_closed()
-        );
-    }
-    {
-        let s = MediaLibraryChangeStream::subscribe(8);
-        println!(
-            "[ok] MediaLibraryChangeStream    buffered={} closed={}",
-            s.buffered_count(),
-            s.is_closed()
-        );
+    let unavailable = [
+        (
+            "NowPlayingItemChangeStream",
+            NowPlayingItemChangeStream::subscribe(8).err(),
+        ),
+        (
+            "PlaybackStateChangeStream",
+            PlaybackStateChangeStream::subscribe(8).err(),
+        ),
+        ("VolumeChangeStream", VolumeChangeStream::subscribe(8).err()),
+        (
+            "MediaLibraryChangeStream",
+            MediaLibraryChangeStream::subscribe(8).err(),
+        ),
+        (
+            "NowPlayingSessionStream",
+            NowPlayingSessionStream::subscribe(8).err(),
+        ),
+    ];
+    for (name, error) in unavailable {
+        let error = error.expect("stream should be unavailable on macOS");
+        println!("[ok] {name:<27} {error}");
     }
 
     // ── RemoteCommandStream ─────────────────────────────────────────────────
@@ -80,23 +72,13 @@ fn run() {
         Command::SeekBackward,
     ];
     for cmd in commands {
-        let s = RemoteCommandStream::subscribe(cmd, 16);
+        let s = RemoteCommandStream::subscribe(cmd, 16).expect("remote command should subscribe");
         // try_next on an idle stream should return None
         assert!(
             s.try_next().is_none(),
             "unexpected buffered event for {cmd:?}"
         );
         println!("[ok] RemoteCommandStream({cmd:?})  buffered={}", s.buffered_count());
-    }
-
-    // ── NowPlayingSessionStream ─────────────────────────────────────────────
-    {
-        let s = NowPlayingSessionStream::subscribe(8);
-        println!(
-            "[ok] NowPlayingSessionStream     buffered={} closed={}",
-            s.buffered_count(),
-            s.is_closed()
-        );
     }
 
     println!("=== all streams created and dropped cleanly — PASS ===");

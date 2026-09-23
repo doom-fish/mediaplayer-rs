@@ -7,106 +7,111 @@ use mediaplayer::async_api::{
     NowPlayingSessionStream, PlaybackStateChangeStream, RemoteCommandStream, VolumeChangeStream,
 };
 use mediaplayer::remote_commands::Command;
+use mediaplayer::MediaPlayerError;
 
-// ── Construction / drop hygiene ──────────────────────────────────────────────
-
-/// Subscribing and immediately dropping should not panic or leak.
 #[test]
-fn now_playing_item_change_stream_subscribe_drop() {
-    let stream = NowPlayingItemChangeStream::subscribe(8);
-    assert_eq!(stream.buffered_count(), 0);
-    assert!(!stream.is_closed());
-    drop(stream);
+fn now_playing_item_change_stream_is_unavailable_on_macos() {
+    assert!(matches!(
+        NowPlayingItemChangeStream::subscribe(8),
+        Err(MediaPlayerError::NotAvailable(_))
+    ));
 }
 
 #[test]
-fn playback_state_change_stream_subscribe_drop() {
-    let stream = PlaybackStateChangeStream::subscribe(8);
-    assert_eq!(stream.buffered_count(), 0);
-    assert!(!stream.is_closed());
-    drop(stream);
+fn playback_state_change_stream_is_unavailable_on_macos() {
+    assert!(matches!(
+        PlaybackStateChangeStream::subscribe(8),
+        Err(MediaPlayerError::NotAvailable(_))
+    ));
 }
 
 #[test]
-fn volume_change_stream_subscribe_drop() {
-    let stream = VolumeChangeStream::subscribe(8);
-    assert_eq!(stream.buffered_count(), 0);
-    assert!(!stream.is_closed());
-    drop(stream);
+fn volume_change_stream_is_unavailable_on_macos() {
+    assert!(matches!(
+        VolumeChangeStream::subscribe(8),
+        Err(MediaPlayerError::NotAvailable(_))
+    ));
 }
 
 #[test]
-fn media_library_change_stream_subscribe_drop() {
-    let stream = MediaLibraryChangeStream::subscribe(8);
-    assert_eq!(stream.buffered_count(), 0);
-    assert!(!stream.is_closed());
-    drop(stream);
+fn media_library_change_stream_is_unavailable_on_macos() {
+    assert!(matches!(
+        MediaLibraryChangeStream::subscribe(8),
+        Err(MediaPlayerError::NotAvailable(_))
+    ));
 }
 
 // ── RemoteCommandStream ──────────────────────────────────────────────────────
 
 #[test]
 fn remote_command_stream_subscribe_play_drop() {
-    let stream = RemoteCommandStream::subscribe(Command::Play, 16);
+    let stream = RemoteCommandStream::subscribe(Command::Play, 16)
+        .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
     drop(stream);
 }
 
 #[test]
 fn remote_command_stream_subscribe_pause_drop() {
-    let stream = RemoteCommandStream::subscribe(Command::Pause, 16);
+    let stream = RemoteCommandStream::subscribe(Command::Pause, 16)
+        .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
     drop(stream);
 }
 
 #[test]
 fn remote_command_stream_subscribe_skip_forward_drop() {
-    let stream = RemoteCommandStream::subscribe(Command::SkipForward, 8);
+    let stream = RemoteCommandStream::subscribe(Command::SkipForward, 8)
+        .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
     drop(stream);
 }
 
 #[test]
 fn remote_command_stream_subscribe_skip_backward_drop() {
-    let stream = RemoteCommandStream::subscribe(Command::SkipBackward, 8);
+    let stream = RemoteCommandStream::subscribe(Command::SkipBackward, 8)
+        .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
     drop(stream);
 }
 
 #[test]
 fn remote_command_stream_subscribe_next_track_drop() {
-    let stream = RemoteCommandStream::subscribe(Command::NextTrack, 8);
+    let stream = RemoteCommandStream::subscribe(Command::NextTrack, 8)
+        .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
     drop(stream);
 }
 
 #[test]
 fn remote_command_stream_subscribe_previous_track_drop() {
-    let stream = RemoteCommandStream::subscribe(Command::PreviousTrack, 8);
+    let stream = RemoteCommandStream::subscribe(Command::PreviousTrack, 8)
+        .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
     drop(stream);
 }
 
 #[test]
 fn remote_command_stream_try_next_empty() {
-    let stream = RemoteCommandStream::subscribe(Command::Play, 4);
+    let stream = RemoteCommandStream::subscribe(Command::Play, 4)
+        .expect("remote command stream should subscribe");
     assert!(stream.try_next().is_none());
 }
 
-// ── NowPlayingSessionStream ──────────────────────────────────────────────────
-
 #[test]
-fn now_playing_session_stream_subscribe_drop() {
-    let stream = NowPlayingSessionStream::subscribe(8);
-    assert_eq!(stream.buffered_count(), 0);
-    // Not closed until the handle drops (which it does at end of scope).
-    drop(stream);
+fn remote_command_stream_rejects_zero_capacity() {
+    assert!(matches!(
+        RemoteCommandStream::subscribe(Command::Play, 0),
+        Err(MediaPlayerError::InvalidArgument(_))
+    ));
 }
 
 #[test]
-fn now_playing_session_stream_try_next_empty() {
-    let stream = NowPlayingSessionStream::subscribe(4);
-    assert!(stream.try_next().is_none());
+fn now_playing_session_stream_is_unavailable_on_macos() {
+    assert!(matches!(
+        NowPlayingSessionStream::subscribe(8),
+        Err(MediaPlayerError::NotAvailable(_))
+    ));
 }
 
 // ── Stream-closes-on-drop: pollster smoke ────────────────────────────────────
@@ -117,7 +122,8 @@ fn now_playing_session_stream_try_next_empty() {
 /// can verify the happy-path shape.
 #[test]
 fn remote_command_stream_capacity_is_honored() {
-    let stream = RemoteCommandStream::subscribe(Command::Play, 4);
+    let stream = RemoteCommandStream::subscribe(Command::Play, 4)
+        .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
     // capacity getter via inner — we just assert no panic:
     drop(stream);

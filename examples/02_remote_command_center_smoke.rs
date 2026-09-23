@@ -2,7 +2,7 @@
 
 use mediaplayer::prelude::*;
 
-fn main() {
+fn main() -> Result<(), MediaPlayerError> {
     let center = RemoteCommandCenter::shared();
 
     let play = center.play_command();
@@ -32,19 +32,20 @@ fn main() {
     let _play_token = play.add_handler(|event| {
         println!("play at {:.3}", event.timestamp);
         HandlerStatus::Success
-    });
+    })?;
     let _rating_token = center.on_rating(|event| {
         println!("rating = {:?}", event.rating);
         HandlerStatus::Success
-    });
+    })?;
     let _language_token = center.on_enable_language_option(|event| {
         println!("language option = {:?}", event.language_option_setting);
         HandlerStatus::Success
-    });
+    })?;
 
     let enabled = play.is_enabled();
     let skip_intervals = skip.preferred_intervals();
     let like_active = like.is_active();
     let supported_rates = rate.supported_playback_rates();
     println!("enabled={enabled} skip={skip_intervals:?} like={like_active} rates={supported_rates:?}");
+    Ok(())
 }
