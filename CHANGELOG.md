@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `NowPlayingInfoCenter::set_now_playing_info` and `set_now_playing_info_with_artwork` return `Result<(), MediaPlayerError>`. A rejected update leaves the current now-playing info untouched.
 - **Breaking:** `RemoteCommandStream::subscribe` returns `Result` and rejects a capacity of 0. `NowPlayingItemChangeStream`, `PlaybackStateChangeStream`, `VolumeChangeStream`, `MediaLibraryChangeStream` and `NowPlayingSessionStream::subscribe` return `Err(MediaPlayerError::NotAvailable)`: Apple marks those notifications and the session delegate unavailable on macOS, so the streams could never deliver an event.
 - **Breaking:** `NowPlayingInfo` has a new public `values` field.
+- **Breaking:** the typed `NowPlayingInfo` builders for version-gated keys (`credits_start_time` before macOS 13, `international_standard_recording_code` and `exclude_from_suggestions` before macOS 15, the animated artwork before macOS 26) make `set_now_playing_info` return `Err(MediaPlayerError::NotAvailable)` instead of silently leaving the key out. `NowPlayingInfo::value` returns `NotAvailable` for those keys too, where it returned `InvalidArgument`.
+- **Breaking:** an `asset_url` that isn't a valid URL makes `set_now_playing_info` return `InvalidArgument` instead of being silently left out.
+- **Breaking:** the raw `ffi::mp_now_playing_info_box_set_*` setters for typed keys return a status code.
 - **Breaking:** the raw `ffi::mp_remote_command_add_handler` takes a context release callback.
 - **Breaking:** requires apple-cf 0.11, so `Artwork::bounds` returns the nested `CGRect { origin, size }`, and doom-fish-utils 0.4.1.
 - `rust-version` is 1.82.

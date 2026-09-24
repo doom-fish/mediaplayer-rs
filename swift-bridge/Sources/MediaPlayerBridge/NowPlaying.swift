@@ -231,6 +231,19 @@ let MP_NOW_PLAYING_OK: Int32 = 0
 let MP_NOW_PLAYING_UNKNOWN_KEY: Int32 = 1
 let MP_NOW_PLAYING_OBJECT_KEY: Int32 = 2
 let MP_NOW_PLAYING_INVALID_VALUE: Int32 = 3
+let MP_NOW_PLAYING_UNAVAILABLE_KEY: Int32 = 4
+
+private let mpVersionGatedNowPlayingKeyNames: Set<String> = [
+    "MPNowPlayingInfoPropertyCreditsStartTime",
+    "MPNowPlayingInfoPropertyInternationalStandardRecordingCode",
+    "MPNowPlayingInfoPropertyExcludeFromSuggestions",
+    "MPNowPlayingInfoProperty1x1AnimatedArtwork",
+    "MPNowPlayingInfoProperty3x4AnimatedArtwork",
+]
+
+private func mpTypedKeyStatus(_ keyId: Int32) -> Int32 {
+    MPNowPlayingKey(rawValue: keyId) == nil ? MP_NOW_PLAYING_UNKNOWN_KEY : MP_NOW_PLAYING_UNAVAILABLE_KEY
+}
 
 @_cdecl("mp_now_playing_info_box_set_named")
 public func mp_now_playing_info_box_set_named(
@@ -243,8 +256,9 @@ public func mp_now_playing_info_box_set_named(
     _ uint64Value: UInt64
 ) -> Int32 {
     guard let info, let keyName else { return MP_NOW_PLAYING_INVALID_VALUE }
-    guard let key = mpResolveNowPlayingKey(String(cString: keyName)) else {
-        return MP_NOW_PLAYING_UNKNOWN_KEY
+    let name = String(cString: keyName)
+    guard let key = mpResolveNowPlayingKey(name) else {
+        return mpVersionGatedNowPlayingKeyNames.contains(name) ? MP_NOW_PLAYING_UNAVAILABLE_KEY : MP_NOW_PLAYING_UNKNOWN_KEY
     }
     guard !mpObjectValuedNowPlayingKeys().contains(key) else { return MP_NOW_PLAYING_OBJECT_KEY }
     let value: Any
@@ -432,10 +446,12 @@ public func mp_now_playing_info_box_set_string(
     _ info: UnsafeMutableRawPointer?,
     _ keyId: Int32,
     _ value: UnsafePointer<CChar>?
-) {
-    guard let info, let value, let key = mpNowPlayingDictionaryKey(keyId) else { return }
+) -> Int32 {
+    guard let info, let value else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard let key = mpNowPlayingDictionaryKey(keyId) else { return mpTypedKeyStatus(keyId) }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
     box.info[key] = String(cString: value)
+    return MP_NOW_PLAYING_OK
 }
 
 @_cdecl("mp_now_playing_info_box_set_double")
@@ -443,10 +459,12 @@ public func mp_now_playing_info_box_set_double(
     _ info: UnsafeMutableRawPointer?,
     _ keyId: Int32,
     _ value: Double
-) {
-    guard let info, let key = mpNowPlayingDictionaryKey(keyId) else { return }
+) -> Int32 {
+    guard let info else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard let key = mpNowPlayingDictionaryKey(keyId) else { return mpTypedKeyStatus(keyId) }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
     box.info[key] = value
+    return MP_NOW_PLAYING_OK
 }
 
 @_cdecl("mp_now_playing_info_box_set_u64")
@@ -454,10 +472,12 @@ public func mp_now_playing_info_box_set_u64(
     _ info: UnsafeMutableRawPointer?,
     _ keyId: Int32,
     _ value: UInt64
-) {
-    guard let info, let key = mpNowPlayingDictionaryKey(keyId) else { return }
+) -> Int32 {
+    guard let info else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard let key = mpNowPlayingDictionaryKey(keyId) else { return mpTypedKeyStatus(keyId) }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
     box.info[key] = NSNumber(value: value)
+    return MP_NOW_PLAYING_OK
 }
 
 @_cdecl("mp_now_playing_info_box_set_bool")
@@ -465,10 +485,12 @@ public func mp_now_playing_info_box_set_bool(
     _ info: UnsafeMutableRawPointer?,
     _ keyId: Int32,
     _ value: Int32
-) {
-    guard let info, let key = mpNowPlayingDictionaryKey(keyId) else { return }
+) -> Int32 {
+    guard let info else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard let key = mpNowPlayingDictionaryKey(keyId) else { return mpTypedKeyStatus(keyId) }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
     box.info[key] = value != 0
+    return MP_NOW_PLAYING_OK
 }
 
 @_cdecl("mp_now_playing_info_box_set_url")
@@ -476,12 +498,13 @@ public func mp_now_playing_info_box_set_url(
     _ info: UnsafeMutableRawPointer?,
     _ keyId: Int32,
     _ value: UnsafePointer<CChar>?
-) {
-    guard let info, let value, let key = mpNowPlayingDictionaryKey(keyId) else { return }
+) -> Int32 {
+    guard let info, let value else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard let key = mpNowPlayingDictionaryKey(keyId) else { return mpTypedKeyStatus(keyId) }
+    guard let url = URL(string: String(cString: value)) else { return MP_NOW_PLAYING_INVALID_VALUE }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
-    if let url = URL(string: String(cString: value)) {
-        box.info[key] = url
-    }
+    box.info[key] = url
+    return MP_NOW_PLAYING_OK
 }
 
 @_cdecl("mp_now_playing_info_box_set_date_seconds")
@@ -489,10 +512,12 @@ public func mp_now_playing_info_box_set_date_seconds(
     _ info: UnsafeMutableRawPointer?,
     _ keyId: Int32,
     _ value: Double
-) {
-    guard let info, let key = mpNowPlayingDictionaryKey(keyId) else { return }
+) -> Int32 {
+    guard let info else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard let key = mpNowPlayingDictionaryKey(keyId) else { return mpTypedKeyStatus(keyId) }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
     box.info[key] = Date(timeIntervalSince1970: value)
+    return MP_NOW_PLAYING_OK
 }
 
 @_cdecl("mp_now_playing_info_box_set_artwork")
@@ -511,13 +536,15 @@ public func mp_now_playing_info_box_set_animated_artwork(
     _ info: UnsafeMutableRawPointer?,
     _ keyId: Int32,
     _ artworkPtr: UnsafeMutableRawPointer?
-) {
-    guard #available(macOS 26.0, *), let info, let artworkPtr, let key = mpNowPlayingDictionaryKey(keyId) else {
-        return
+) -> Int32 {
+    guard let info, let artworkPtr else { return MP_NOW_PLAYING_INVALID_VALUE }
+    guard #available(macOS 26.0, *), let key = mpNowPlayingDictionaryKey(keyId) else {
+        return mpTypedKeyStatus(keyId)
     }
     let box: MPNowPlayingInfoBox = mpBorrow(info)
     let artwork: MPMediaItemAnimatedArtwork = mpBorrow(artworkPtr)
     box.info[key] = artwork
+    return MP_NOW_PLAYING_OK
 }
 
 @_cdecl("mp_now_playing_info_box_set_available_language_option_groups")

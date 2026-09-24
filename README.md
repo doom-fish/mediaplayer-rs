@@ -7,7 +7,7 @@ Safe Rust bindings for Apple's `MediaPlayer.framework` on macOS.
 ## Requirements
 
 - macOS 12 or later (the Swift bridge's deployment target).
-- Newer keys are version-gated: `MPNowPlayingInfoPropertyCreditsStartTime` needs macOS 13, the ISRC and exclude-from-suggestions keys need macOS 15, and animated artwork needs macOS 26. On older systems the typed builder skips them, and passing them to `NowPlayingInfo::value` makes `set_now_playing_info` return `InvalidArgument`.
+- Newer keys are version-gated: `MPNowPlayingInfoPropertyCreditsStartTime` needs macOS 13, the ISRC and exclude-from-suggestions keys need macOS 15, and animated artwork needs macOS 26. On older systems setting one of them, through its typed builder or `NowPlayingInfo::value`, makes `set_now_playing_info` return `NotAvailable` and leaves the current now-playing info untouched.
 - Remote-command handlers are delivered on the main queue, so the process must run the main run loop (an app, or `CFRunLoopRun` in a command-line tool) to receive commands.
 
 ## Async streams (`async` feature)
@@ -107,7 +107,7 @@ fn main() -> Result<(), MediaPlayerError> {
 ## Highlights
 
 - **`NowPlayingInfoCenter`** — fluent `NowPlayingInfo` builder covering queue state, playback progress, language options, service identifiers, live-stream flags, and playback dates, plus `NowPlayingInfo::value(key, NowPlayingValue)` for any media-item or now-playing key in `constants` and `now_playing_info()` to read the current dictionary back.
-  - Setters return `Result`. Strings with NUL bytes, unknown keys, invalid URLs, and object-valued keys (artwork, language options and animated artwork have typed setters) are `InvalidArgument`, and a rejected update leaves the current info untouched.
+  - Setters return `Result`. Strings with NUL bytes, unknown keys, invalid URLs, and object-valued keys (artwork, language options and animated artwork have typed setters) are `InvalidArgument`, keys that need a newer macOS than the running one are `NotAvailable`, and a rejected update leaves the current info untouched.
   - Readback reports keys by symbol name. `MPMediaEntityPropertyPersistentID` and `MPMediaItemPropertyPersistentID` share one dictionary key and read back as the latter, unsigned values that fit in `i64` read back as `Integer`, and objects read back as `Other` with their type name.
 - **`LanguageOption` / `LanguageOptionGroup`** — wrappers for `MPNowPlayingInfoLanguageOption` and `MPNowPlayingInfoLanguageOptionGroup`; the `constants::LANGUAGE_OPTION_CHARACTERISTIC_*` names are translated to the SDK's characteristic values.
 - **`RemoteCommandCenter`** — zero-cost command handles for base, skip-interval, feedback, rating, playback-rate, shuffle, repeat, and language-option commands. Registering a handler returns `Result<CommandToken, MediaPlayerError>`.

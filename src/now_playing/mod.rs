@@ -1,12 +1,12 @@
 //! Wrapper for `MPNowPlayingInfoCenter` and related now-playing metadata types.
 
-use core::ffi::{c_char, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::artwork::{AnimatedArtwork, Artwork};
-use crate::{ffi, unsupported, MediaPlayerError};
+use crate::{constants, ffi, unsupported, MediaPlayerError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u32)]
@@ -603,195 +603,150 @@ impl NowPlayingInfoCenter {
             CString::new(value)
                 .map_err(|error| MediaPlayerError::InvalidArgument(error.to_string()))
         };
+        let set_string = |key: NowPlayingKey, value: &str| {
+            let value = mk(value)?;
+            now_playing_status(
+                unsafe {
+                    ffi::mp_now_playing_info_box_set_string(info_box, key as i32, value.as_ptr())
+                },
+                key.symbol(),
+            )
+        };
+        let set_url = |key: NowPlayingKey, value: &str| {
+            let value = mk(value)?;
+            now_playing_status(
+                unsafe {
+                    ffi::mp_now_playing_info_box_set_url(info_box, key as i32, value.as_ptr())
+                },
+                key.symbol(),
+            )
+        };
+        let set_double = |key: NowPlayingKey, value: f64| {
+            now_playing_status(
+                unsafe { ffi::mp_now_playing_info_box_set_double(info_box, key as i32, value) },
+                key.symbol(),
+            )
+        };
+        let set_u64 = |key: NowPlayingKey, value: u64| {
+            now_playing_status(
+                unsafe { ffi::mp_now_playing_info_box_set_u64(info_box, key as i32, value) },
+                key.symbol(),
+            )
+        };
+        let set_bool = |key: NowPlayingKey, value: bool| {
+            now_playing_status(
+                unsafe {
+                    ffi::mp_now_playing_info_box_set_bool(info_box, key as i32, i32::from(value))
+                },
+                key.symbol(),
+            )
+        };
+        let set_date = |key: NowPlayingKey, value: SystemTime| {
+            now_playing_status(
+                unsafe {
+                    ffi::mp_now_playing_info_box_set_date_seconds(
+                        info_box,
+                        key as i32,
+                        system_time_to_unix_seconds(value),
+                    )
+                },
+                key.symbol(),
+            )
+        };
+        let set_animated_artwork = |key: NowPlayingKey, artwork: &AnimatedArtwork| {
+            now_playing_status(
+                unsafe {
+                    ffi::mp_now_playing_info_box_set_animated_artwork(
+                        info_box,
+                        key as i32,
+                        artwork.ptr,
+                    )
+                },
+                key.symbol(),
+            )
+        };
 
+        if let Some(value) = info.title.as_deref() {
+            set_string(NowPlayingKey::Title, value)?;
+        }
+        if let Some(value) = info.artist.as_deref() {
+            set_string(NowPlayingKey::Artist, value)?;
+        }
+        if let Some(value) = info.album_title.as_deref() {
+            set_string(NowPlayingKey::AlbumTitle, value)?;
+        }
+        if let Some(value) = info.playback_duration {
+            set_double(NowPlayingKey::PlaybackDuration, value)?;
+        }
+        if let Some(value) = info.elapsed_playback_time {
+            set_double(NowPlayingKey::ElapsedPlaybackTime, value)?;
+        }
+        if let Some(value) = info.playback_rate {
+            set_double(NowPlayingKey::PlaybackRate, value)?;
+        }
+        if let Some(value) = info.default_playback_rate {
+            set_double(NowPlayingKey::DefaultPlaybackRate, value)?;
+        }
+        if let Some(value) = info.playback_queue_index {
+            set_u64(NowPlayingKey::PlaybackQueueIndex, value)?;
+        }
+        if let Some(value) = info.playback_queue_count {
+            set_u64(NowPlayingKey::PlaybackQueueCount, value)?;
+        }
+        if let Some(value) = info.chapter_number {
+            set_u64(NowPlayingKey::ChapterNumber, value)?;
+        }
+        if let Some(value) = info.chapter_count {
+            set_u64(NowPlayingKey::ChapterCount, value)?;
+        }
+        if let Some(value) = info.is_live_stream {
+            set_bool(NowPlayingKey::IsLiveStream, value)?;
+        }
+        if let Some(value) = info.collection_identifier.as_deref() {
+            set_string(NowPlayingKey::CollectionIdentifier, value)?;
+        }
+        if let Some(value) = info.external_content_identifier.as_deref() {
+            set_string(NowPlayingKey::ExternalContentIdentifier, value)?;
+        }
+        if let Some(value) = info.external_user_profile_identifier.as_deref() {
+            set_string(NowPlayingKey::ExternalUserProfileIdentifier, value)?;
+        }
+        if let Some(value) = info.service_identifier.as_deref() {
+            set_string(NowPlayingKey::ServiceIdentifier, value)?;
+        }
+        if let Some(value) = info.playback_progress {
+            set_double(NowPlayingKey::PlaybackProgress, value)?;
+        }
+        if let Some(value) = info.media_type {
+            set_u64(NowPlayingKey::MediaType, value as u64)?;
+        }
+        if let Some(value) = info.asset_url.as_deref() {
+            set_url(NowPlayingKey::AssetURL, value)?;
+        }
+        if let Some(value) = info.current_playback_date {
+            set_date(NowPlayingKey::CurrentPlaybackDate, value)?;
+        }
+        if let Some(value) = info.credits_start_time {
+            set_double(NowPlayingKey::CreditsStartTime, value)?;
+        }
+        if let Some(value) = info.international_standard_recording_code.as_deref() {
+            set_string(NowPlayingKey::InternationalStandardRecordingCode, value)?;
+        }
+        if let Some(value) = info.exclude_from_suggestions {
+            set_bool(NowPlayingKey::ExcludeFromSuggestions, value)?;
+        }
         unsafe {
-            if let Some(value) = info.title.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::Title as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.artist.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::Artist as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.album_title.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::AlbumTitle as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.playback_duration {
-                ffi::mp_now_playing_info_box_set_double(
-                    info_box,
-                    NowPlayingKey::PlaybackDuration as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.elapsed_playback_time {
-                ffi::mp_now_playing_info_box_set_double(
-                    info_box,
-                    NowPlayingKey::ElapsedPlaybackTime as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.playback_rate {
-                ffi::mp_now_playing_info_box_set_double(
-                    info_box,
-                    NowPlayingKey::PlaybackRate as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.default_playback_rate {
-                ffi::mp_now_playing_info_box_set_double(
-                    info_box,
-                    NowPlayingKey::DefaultPlaybackRate as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.playback_queue_index {
-                ffi::mp_now_playing_info_box_set_u64(
-                    info_box,
-                    NowPlayingKey::PlaybackQueueIndex as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.playback_queue_count {
-                ffi::mp_now_playing_info_box_set_u64(
-                    info_box,
-                    NowPlayingKey::PlaybackQueueCount as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.chapter_number {
-                ffi::mp_now_playing_info_box_set_u64(
-                    info_box,
-                    NowPlayingKey::ChapterNumber as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.chapter_count {
-                ffi::mp_now_playing_info_box_set_u64(
-                    info_box,
-                    NowPlayingKey::ChapterCount as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.is_live_stream {
-                ffi::mp_now_playing_info_box_set_bool(
-                    info_box,
-                    NowPlayingKey::IsLiveStream as i32,
-                    i32::from(value),
-                );
-            }
-            if let Some(value) = info.collection_identifier.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::CollectionIdentifier as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.external_content_identifier.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::ExternalContentIdentifier as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.external_user_profile_identifier.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::ExternalUserProfileIdentifier as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.service_identifier.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::ServiceIdentifier as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.playback_progress {
-                ffi::mp_now_playing_info_box_set_double(
-                    info_box,
-                    NowPlayingKey::PlaybackProgress as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.media_type {
-                ffi::mp_now_playing_info_box_set_u64(
-                    info_box,
-                    NowPlayingKey::MediaType as i32,
-                    value as u64,
-                );
-            }
-            if let Some(value) = info.asset_url.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_url(
-                    info_box,
-                    NowPlayingKey::AssetURL as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.current_playback_date {
-                ffi::mp_now_playing_info_box_set_date_seconds(
-                    info_box,
-                    NowPlayingKey::CurrentPlaybackDate as i32,
-                    system_time_to_unix_seconds(value),
-                );
-            }
-            if let Some(value) = info.credits_start_time {
-                ffi::mp_now_playing_info_box_set_double(
-                    info_box,
-                    NowPlayingKey::CreditsStartTime as i32,
-                    value,
-                );
-            }
-            if let Some(value) = info.international_standard_recording_code.as_deref() {
-                let value = mk(value)?;
-                ffi::mp_now_playing_info_box_set_string(
-                    info_box,
-                    NowPlayingKey::InternationalStandardRecordingCode as i32,
-                    value.as_ptr(),
-                );
-            }
-            if let Some(value) = info.exclude_from_suggestions {
-                ffi::mp_now_playing_info_box_set_bool(
-                    info_box,
-                    NowPlayingKey::ExcludeFromSuggestions as i32,
-                    i32::from(value),
-                );
-            }
             if let Some(artwork) = artwork {
                 ffi::mp_now_playing_info_box_set_artwork(info_box, artwork.ptr);
             }
-            if let Some(animated_artwork) = info.animated_artwork_1x1.as_ref() {
-                ffi::mp_now_playing_info_box_set_animated_artwork(
-                    info_box,
-                    NowPlayingKey::AnimatedArtwork1x1 as i32,
-                    animated_artwork.ptr,
-                );
-            }
-            if let Some(animated_artwork) = info.animated_artwork_3x4.as_ref() {
-                ffi::mp_now_playing_info_box_set_animated_artwork(
-                    info_box,
-                    NowPlayingKey::AnimatedArtwork3x4 as i32,
-                    animated_artwork.ptr,
-                );
-            }
+        }
+        if let Some(animated_artwork) = info.animated_artwork_1x1.as_ref() {
+            set_animated_artwork(NowPlayingKey::AnimatedArtwork1x1, animated_artwork)?;
+        }
+        if let Some(animated_artwork) = info.animated_artwork_3x4.as_ref() {
+            set_animated_artwork(NowPlayingKey::AnimatedArtwork3x4, animated_artwork)?;
+        }
+        unsafe {
             if !info.available_language_option_groups.is_empty() {
                 let group_ptrs = info
                     .available_language_option_groups
@@ -894,6 +849,7 @@ impl Drop for NowPlayingInfoCenter {
     }
 }
 
+#[derive(Clone, Copy)]
 #[repr(i32)]
 enum NowPlayingKey {
     Title = 0,
@@ -921,6 +877,58 @@ enum NowPlayingKey {
     ExcludeFromSuggestions = 22,
     AnimatedArtwork1x1 = 23,
     AnimatedArtwork3x4 = 24,
+}
+
+impl NowPlayingKey {
+    const fn symbol(self) -> &'static str {
+        match self {
+            Self::Title => constants::TITLE,
+            Self::Artist => constants::ARTIST,
+            Self::AlbumTitle => constants::ALBUM_TITLE,
+            Self::PlaybackDuration => constants::PLAYBACK_DURATION,
+            Self::ElapsedPlaybackTime => constants::ELAPSED_PLAYBACK_TIME,
+            Self::PlaybackRate => constants::PLAYBACK_RATE,
+            Self::DefaultPlaybackRate => constants::DEFAULT_PLAYBACK_RATE,
+            Self::PlaybackQueueIndex => constants::PLAYBACK_QUEUE_INDEX,
+            Self::PlaybackQueueCount => constants::PLAYBACK_QUEUE_COUNT,
+            Self::ChapterNumber => constants::CHAPTER_NUMBER,
+            Self::ChapterCount => constants::CHAPTER_COUNT,
+            Self::IsLiveStream => constants::IS_LIVE_STREAM,
+            Self::CollectionIdentifier => constants::COLLECTION_IDENTIFIER,
+            Self::ExternalContentIdentifier => constants::EXTERNAL_CONTENT_IDENTIFIER,
+            Self::ExternalUserProfileIdentifier => constants::EXTERNAL_USER_PROFILE_IDENTIFIER,
+            Self::ServiceIdentifier => constants::SERVICE_IDENTIFIER,
+            Self::PlaybackProgress => constants::PLAYBACK_PROGRESS,
+            Self::MediaType => constants::MEDIA_TYPE,
+            Self::AssetURL => constants::ASSET_URL,
+            Self::CurrentPlaybackDate => constants::CURRENT_PLAYBACK_DATE,
+            Self::CreditsStartTime => constants::CREDITS_START_TIME,
+            Self::InternationalStandardRecordingCode => {
+                constants::INTERNATIONAL_STANDARD_RECORDING_CODE
+            }
+            Self::ExcludeFromSuggestions => constants::EXCLUDE_FROM_SUGGESTIONS,
+            Self::AnimatedArtwork1x1 => constants::ANIMATED_ARTWORK_1X1,
+            Self::AnimatedArtwork3x4 => constants::ANIMATED_ARTWORK_3X4,
+        }
+    }
+}
+
+fn now_playing_status(status: c_int, key: &str) -> Result<(), MediaPlayerError> {
+    match status {
+        0 => Ok(()),
+        1 => Err(MediaPlayerError::InvalidArgument(format!(
+            "{key} is not a now-playing key available on this system"
+        ))),
+        2 => Err(MediaPlayerError::InvalidArgument(format!(
+            "{key} holds an object; set it through the typed NowPlayingInfo fields or artwork"
+        ))),
+        4 => Err(MediaPlayerError::NotAvailable(format!(
+            "{key} needs a newer macOS than this system"
+        ))),
+        _ => Err(MediaPlayerError::InvalidArgument(format!(
+            "{key}: the value is not valid for this key"
+        ))),
+    }
 }
 
 fn copy_lines(ptr: *mut core::ffi::c_char) -> Vec<String> {
@@ -997,18 +1005,7 @@ unsafe fn set_named_value(
             uint64,
         )
     };
-    match status {
-        0 => Ok(()),
-        1 => Err(MediaPlayerError::InvalidArgument(format!(
-            "{key} is not a now-playing key available on this system"
-        ))),
-        2 => Err(MediaPlayerError::InvalidArgument(format!(
-            "{key} holds an object; set it through the typed NowPlayingInfo fields or artwork"
-        ))),
-        _ => Err(MediaPlayerError::InvalidArgument(format!(
-            "{key}: the value is not valid for this key"
-        ))),
-    }
+    now_playing_status(status, key)
 }
 
 #[cfg(test)]
@@ -1016,7 +1013,10 @@ mod tests {
     use core::ffi::{c_char, c_void};
     use std::ffi::CString;
 
-    use super::{LanguageOption, LanguageOptionGroup, LanguageOptionType};
+    use super::{
+        now_playing_status, LanguageOption, LanguageOptionGroup, LanguageOptionType, NowPlayingKey,
+    };
+    use crate::{ffi, MediaPlayerError};
 
     unsafe extern "C" {
         fn mp_test_media_selection_option_new(
@@ -1134,6 +1134,82 @@ mod tests {
             mp_test_media_selection_group_release(group);
             mp_test_media_selection_option_release(english);
             mp_test_media_selection_option_release(swedish);
+        }
+    }
+
+    #[test]
+    fn typed_setters_report_their_status() {
+        let info_box = unsafe { ffi::mp_now_playing_info_box_new() };
+        assert!(!info_box.is_null());
+        let url = CString::new("https://example.com/track").expect("URL should be valid");
+        let empty = CString::new("").expect("empty string should be valid");
+        unsafe {
+            assert_eq!(
+                ffi::mp_now_playing_info_box_set_double(
+                    info_box,
+                    NowPlayingKey::PlaybackRate as i32,
+                    1.0
+                ),
+                0
+            );
+            assert_eq!(
+                ffi::mp_now_playing_info_box_set_double(info_box, 99, 1.0),
+                1
+            );
+            assert_eq!(ffi::mp_now_playing_info_box_set_u64(info_box, -1, 1), 1);
+            assert_eq!(
+                ffi::mp_now_playing_info_box_set_url(
+                    info_box,
+                    NowPlayingKey::AssetURL as i32,
+                    url.as_ptr()
+                ),
+                0
+            );
+            assert_eq!(
+                ffi::mp_now_playing_info_box_set_url(
+                    info_box,
+                    NowPlayingKey::AssetURL as i32,
+                    empty.as_ptr()
+                ),
+                3
+            );
+            assert_eq!(
+                ffi::mp_now_playing_info_box_set_string(
+                    info_box,
+                    NowPlayingKey::Title as i32,
+                    core::ptr::null()
+                ),
+                3
+            );
+            assert_eq!(
+                ffi::mp_now_playing_info_box_set_animated_artwork(
+                    info_box,
+                    NowPlayingKey::AnimatedArtwork1x1 as i32,
+                    core::ptr::null_mut()
+                ),
+                3
+            );
+            ffi::mp_now_playing_info_box_release(info_box);
+        }
+    }
+
+    #[test]
+    fn status_codes_map_to_errors() {
+        assert_eq!(now_playing_status(0, "key"), Ok(()));
+        let unavailable = now_playing_status(4, NowPlayingKey::CreditsStartTime.symbol());
+        assert!(
+            matches!(
+                &unavailable,
+                Err(MediaPlayerError::NotAvailable(message))
+                    if message.contains("MPNowPlayingInfoPropertyCreditsStartTime")
+            ),
+            "{unavailable:?}"
+        );
+        for status in [1, 2, 3, -1] {
+            assert!(matches!(
+                now_playing_status(status, "key"),
+                Err(MediaPlayerError::InvalidArgument(_))
+            ));
         }
     }
 }

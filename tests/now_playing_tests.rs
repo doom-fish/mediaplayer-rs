@@ -307,6 +307,7 @@ fn rejected_now_playing_info_leaves_the_current_info_untouched() {
         NowPlayingInfo::new().value("NotANowPlayingKey", text("value")),
         NowPlayingInfo::new().value(keys::PLAYLIST_NAME, text("playlist")),
         NowPlayingInfo::new().value(keys::ASSET_URL, NowPlayingValue::Url(String::new())),
+        NowPlayingInfo::new().asset_url(""),
         NowPlayingInfo::new().value(keys::TITLE, NowPlayingValue::Other("NSObject".to_string())),
         NowPlayingInfo::new().value(keys::ARTWORK, text("artwork")),
         NowPlayingInfo::new().value(keys::AVAILABLE_LANGUAGE_OPTIONS, text("options")),
