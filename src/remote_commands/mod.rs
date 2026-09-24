@@ -965,8 +965,8 @@ mod tests {
         let witness = CallbackContext::new(Mutex::new(sender));
         let token = unsafe {
             ffi::mp_remote_command_add_handler(
-                -1,
-                Some(command_trampoline),
+                Command::Play as c_int,
+                None,
                 witness.retained_ptr(),
                 Some(CallbackContext::<Mutex<mpsc::Sender<()>>>::RELEASE),
             )

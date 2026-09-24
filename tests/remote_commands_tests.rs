@@ -1,11 +1,52 @@
+mod common;
+
 use std::sync::mpsc::{self, TryRecvError};
 
+use common::LiveRemoteCommands;
 use mediaplayer::{
     Command, HandlerStatus, RemoteCommandCenter, RepeatType, ShuffleType,
 };
 
+const EVERY_COMMAND: [Command; 20] = [
+    Command::Play,
+    Command::Pause,
+    Command::Stop,
+    Command::TogglePlayPause,
+    Command::NextTrack,
+    Command::PreviousTrack,
+    Command::SkipForward,
+    Command::SkipBackward,
+    Command::SeekForward,
+    Command::SeekBackward,
+    Command::ChangePlaybackPosition,
+    Command::EnableLanguageOption,
+    Command::DisableLanguageOption,
+    Command::ChangePlaybackRate,
+    Command::ChangeRepeatMode,
+    Command::ChangeShuffleMode,
+    Command::Rating,
+    Command::Like,
+    Command::Dislike,
+    Command::Bookmark,
+];
+
 #[test]
 fn remote_command_configuration_round_trips() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_configuration_round_trips",
+        &[
+            Command::Play,
+            Command::SkipForward,
+            Command::Like,
+            Command::Rating,
+            Command::ChangePlaybackRate,
+            Command::ChangeShuffleMode,
+            Command::ChangeRepeatMode,
+            Command::Bookmark,
+        ],
+    ) else {
+        return;
+    };
     let center = RemoteCommandCenter::shared();
 
     let play = center.play_command();
@@ -62,30 +103,13 @@ fn remote_command_configuration_round_trips() {
 
 #[test]
 fn every_command_accepts_a_handler() {
+    let Some(_commands) =
+        LiveRemoteCommands::acquire("every_command_accepts_a_handler", &EVERY_COMMAND)
+    else {
+        return;
+    };
     let center = RemoteCommandCenter::shared();
-    let tokens = [
-        Command::Play,
-        Command::Pause,
-        Command::Stop,
-        Command::TogglePlayPause,
-        Command::NextTrack,
-        Command::PreviousTrack,
-        Command::SkipForward,
-        Command::SkipBackward,
-        Command::SeekForward,
-        Command::SeekBackward,
-        Command::ChangePlaybackPosition,
-        Command::EnableLanguageOption,
-        Command::DisableLanguageOption,
-        Command::ChangePlaybackRate,
-        Command::ChangeRepeatMode,
-        Command::ChangeShuffleMode,
-        Command::Rating,
-        Command::Like,
-        Command::Dislike,
-        Command::Bookmark,
-    ]
-    .map(|command| {
+    let tokens = EVERY_COMMAND.map(|command| {
         center
             .add_handler(command, |_| HandlerStatus::Success)
             .unwrap_or_else(|error| panic!("{command:?} should register: {error}"))
@@ -95,6 +119,12 @@ fn every_command_accepts_a_handler() {
 
 #[test]
 fn dropping_a_command_token_releases_its_handler() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "dropping_a_command_token_releases_its_handler",
+        &[Command::Play],
+    ) else {
+        return;
+    };
     let (sender, receiver) = mpsc::channel::<Command>();
     let token = RemoteCommandCenter::shared()
         .on_play(move |event| {
@@ -109,6 +139,12 @@ fn dropping_a_command_token_releases_its_handler() {
 
 #[test]
 fn command_tokens_can_be_dropped_on_another_thread() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "command_tokens_can_be_dropped_on_another_thread",
+        &[Command::Pause],
+    ) else {
+        return;
+    };
     let (sender, receiver) = mpsc::channel::<Command>();
     let token = RemoteCommandCenter::shared()
         .on_pause(move |event| {

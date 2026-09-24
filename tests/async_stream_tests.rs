@@ -2,6 +2,9 @@
 
 #![cfg(feature = "async")]
 
+mod common;
+
+use common::LiveRemoteCommands;
 use mediaplayer::async_api::{
     MediaLibraryChangeStream, NowPlayingItemChangeStream, NowPlayingSessionEventKind,
     NowPlayingSessionStream, PlaybackStateChangeStream, RemoteCommandStream, VolumeChangeStream,
@@ -45,6 +48,12 @@ fn media_library_change_stream_is_unavailable_on_macos() {
 
 #[test]
 fn remote_command_stream_subscribe_play_drop() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_stream_subscribe_play_drop",
+        &[Command::Play],
+    ) else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::Play, 16)
         .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
@@ -53,6 +62,12 @@ fn remote_command_stream_subscribe_play_drop() {
 
 #[test]
 fn remote_command_stream_subscribe_pause_drop() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_stream_subscribe_pause_drop",
+        &[Command::Pause],
+    ) else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::Pause, 16)
         .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
@@ -61,6 +76,12 @@ fn remote_command_stream_subscribe_pause_drop() {
 
 #[test]
 fn remote_command_stream_subscribe_skip_forward_drop() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_stream_subscribe_skip_forward_drop",
+        &[Command::SkipForward],
+    ) else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::SkipForward, 8)
         .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
@@ -69,6 +90,12 @@ fn remote_command_stream_subscribe_skip_forward_drop() {
 
 #[test]
 fn remote_command_stream_subscribe_skip_backward_drop() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_stream_subscribe_skip_backward_drop",
+        &[Command::SkipBackward],
+    ) else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::SkipBackward, 8)
         .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
@@ -77,6 +104,12 @@ fn remote_command_stream_subscribe_skip_backward_drop() {
 
 #[test]
 fn remote_command_stream_subscribe_next_track_drop() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_stream_subscribe_next_track_drop",
+        &[Command::NextTrack],
+    ) else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::NextTrack, 8)
         .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
@@ -85,6 +118,12 @@ fn remote_command_stream_subscribe_next_track_drop() {
 
 #[test]
 fn remote_command_stream_subscribe_previous_track_drop() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_stream_subscribe_previous_track_drop",
+        &[Command::PreviousTrack],
+    ) else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::PreviousTrack, 8)
         .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);
@@ -93,6 +132,11 @@ fn remote_command_stream_subscribe_previous_track_drop() {
 
 #[test]
 fn remote_command_stream_try_next_empty() {
+    let Some(_commands) =
+        LiveRemoteCommands::acquire("remote_command_stream_try_next_empty", &[Command::Play])
+    else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::Play, 4)
         .expect("remote command stream should subscribe");
     assert!(stream.try_next().is_none());
@@ -122,6 +166,12 @@ fn now_playing_session_stream_is_unavailable_on_macos() {
 /// can verify the happy-path shape.
 #[test]
 fn remote_command_stream_capacity_is_honored() {
+    let Some(_commands) = LiveRemoteCommands::acquire(
+        "remote_command_stream_capacity_is_honored",
+        &[Command::Play],
+    ) else {
+        return;
+    };
     let stream = RemoteCommandStream::subscribe(Command::Play, 4)
         .expect("remote command stream should subscribe");
     assert_eq!(stream.buffered_count(), 0);

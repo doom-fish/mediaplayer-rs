@@ -1,17 +1,14 @@
-use std::sync::{Mutex, MutexGuard, PoisonError};
+mod common;
+
+use std::mem::ManuallyDrop;
 use std::time::{Duration, UNIX_EPOCH};
 
+use common::LiveNowPlaying;
 use mediaplayer::constants as keys;
 use mediaplayer::{
     LanguageOption, LanguageOptionGroup, LanguageOptionType, MediaPlayerError, NowPlayingInfo,
     NowPlayingInfoCenter, NowPlayingMediaType, NowPlayingValue, PlaybackState,
 };
-
-static SHARED_CENTER: Mutex<()> = Mutex::new(());
-
-fn exclusive_center() -> MutexGuard<'static, ()> {
-    SHARED_CENTER.lock().unwrap_or_else(PoisonError::into_inner)
-}
 
 fn text(value: &str) -> NowPlayingValue {
     NowPlayingValue::String(value.to_string())
@@ -29,7 +26,6 @@ fn as_read_back(value: &NowPlayingValue) -> NowPlayingValue {
 
 #[test]
 fn now_playing_smoke_with_language_options() {
-    let _center_lock = exclusive_center();
     let subtitles = LanguageOption::new(
         LanguageOptionType::Legible,
         Some("en"),
@@ -57,6 +53,10 @@ fn now_playing_smoke_with_language_options() {
     assert_eq!(group.default_language_option_index(), Some(0));
     assert!(group.allow_empty_selection());
 
+    let Some(_now_playing) = LiveNowPlaying::acquire("now_playing_smoke_with_language_options")
+    else {
+        return;
+    };
     let center = NowPlayingInfoCenter::default_center();
     let info = NowPlayingInfo::new()
         .title("Smoke Test Song")
@@ -121,7 +121,6 @@ fn now_playing_smoke_with_language_options() {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn every_media_item_and_now_playing_key_round_trips() {
-    let _center_lock = exclusive_center();
     let released = NowPlayingValue::Date(UNIX_EPOCH + Duration::from_secs(1_000_000_000));
     let values = [
         (
@@ -242,6 +241,11 @@ fn every_media_item_and_now_playing_key_round_trips() {
             info.value(*key, value.clone())
         });
 
+    let Some(_now_playing) =
+        LiveNowPlaying::acquire("every_media_item_and_now_playing_key_round_trips")
+    else {
+        return;
+    };
     let center = NowPlayingInfoCenter::default_center();
     center
         .set_now_playing_info(&info)
@@ -258,7 +262,6 @@ fn every_media_item_and_now_playing_key_round_trips() {
 
 #[test]
 fn raw_key_values_and_aliases_read_back_by_symbol_name() {
-    let _center_lock = exclusive_center();
     let before_epoch = UNIX_EPOCH - Duration::from_secs(86_400);
     let info = NowPlayingInfo::new()
         .value("composer", text("Composer"))
@@ -271,6 +274,11 @@ fn raw_key_values_and_aliases_read_back_by_symbol_name() {
             NowPlayingValue::Date(before_epoch),
         );
 
+    let Some(_now_playing) =
+        LiveNowPlaying::acquire("raw_key_values_and_aliases_read_back_by_symbol_name")
+    else {
+        return;
+    };
     let center = NowPlayingInfoCenter::default_center();
     center
         .set_now_playing_info(&info)
@@ -293,15 +301,8 @@ fn raw_key_values_and_aliases_read_back_by_symbol_name() {
     );
 }
 
-#[test]
-fn rejected_now_playing_info_leaves_the_current_info_untouched() {
-    let _center_lock = exclusive_center();
-    let center = NowPlayingInfoCenter::default_center();
-    center
-        .set_now_playing_info(&NowPlayingInfo::new().title("Kept"))
-        .expect("baseline info should apply");
-
-    let rejected = [
+fn rejected_infos() -> [NowPlayingInfo; 12] {
+    [
         NowPlayingInfo::new().title("Nul\0Title"),
         NowPlayingInfo::new().value(keys::MEDIA_ITEM_GENRE, text("Nul\0Genre")),
         NowPlayingInfo::new().value("NotANowPlayingKey", text("value")),
@@ -314,8 +315,34 @@ fn rejected_now_playing_info_leaves_the_current_info_untouched() {
         NowPlayingInfo::new().value(keys::CURRENT_LANGUAGE_OPTIONS, text("options")),
         NowPlayingInfo::new().value(keys::ANIMATED_ARTWORK_1X1, text("artwork")),
         NowPlayingInfo::new().value(keys::ANIMATED_ARTWORK_3X4, text("artwork")),
-    ];
-    for info in &rejected {
+    ]
+}
+
+#[test]
+fn invalid_now_playing_info_is_rejected_before_it_is_applied() {
+    let center = ManuallyDrop::new(NowPlayingInfoCenter::default_center());
+    for info in &rejected_infos() {
+        let result = center.set_now_playing_info(&info.clone().artist("Replaced"));
+        assert!(
+            matches!(result, Err(MediaPlayerError::InvalidArgument(_))),
+            "{info:?} returned {result:?}"
+        );
+    }
+}
+
+#[test]
+fn rejected_now_playing_info_leaves_the_current_info_untouched() {
+    let Some(_now_playing) =
+        LiveNowPlaying::acquire("rejected_now_playing_info_leaves_the_current_info_untouched")
+    else {
+        return;
+    };
+    let center = NowPlayingInfoCenter::default_center();
+    center
+        .set_now_playing_info(&NowPlayingInfo::new().title("Kept"))
+        .expect("baseline info should apply");
+
+    for info in &rejected_infos() {
         let result = center.set_now_playing_info(&info.clone().artist("Replaced"));
         assert!(
             matches!(result, Err(MediaPlayerError::InvalidArgument(_))),

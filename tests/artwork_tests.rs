@@ -1,17 +1,12 @@
-use std::sync::{Mutex, MutexGuard, PoisonError};
+mod common;
 
 use apple_cf::cg::CGSize;
+use common::LiveNowPlaying;
 use mediaplayer::constants as keys;
 use mediaplayer::{
     AnimatedArtwork, Artwork, MediaPlayerError, NowPlayingInfo, NowPlayingInfoCenter,
     NowPlayingValue,
 };
-
-static SHARED_CENTER: Mutex<()> = Mutex::new(());
-
-fn exclusive_center() -> MutexGuard<'static, ()> {
-    SHARED_CENTER.lock().unwrap_or_else(PoisonError::into_inner)
-}
 
 fn fixture_bytes() -> Vec<u8> {
     std::fs::read("tests/fixtures/cover.png").expect("fixture artwork should be readable")
@@ -48,7 +43,6 @@ fn artwork_loads_fixture_and_reports_bounds() {
 
 #[test]
 fn animated_artwork_can_be_created_and_applied() {
-    let _center_lock = exclusive_center();
     let animated = AnimatedArtwork::from_files(
         "cover-loop",
         "tests/fixtures/cover.png",
@@ -57,6 +51,10 @@ fn animated_artwork_can_be_created_and_applied() {
     .expect("animated artwork should be created from local files");
     let cloned = animated.clone();
 
+    let Some(_now_playing) = LiveNowPlaying::acquire("animated_artwork_can_be_created_and_applied")
+    else {
+        return;
+    };
     let center = NowPlayingInfoCenter::default_center();
     let info = NowPlayingInfo::new()
         .title("Animated Artwork Demo")
@@ -163,9 +161,12 @@ fn artwork_image_requests_validate_the_size() {
 
 #[test]
 fn in_memory_artwork_applies_to_now_playing() {
-    let _center_lock = exclusive_center();
     let artwork = Artwork::from_image_data(&fixture_bytes(), Some(CGSize::new(300.0, 300.0)))
         .expect("fixture bytes should decode");
+    let Some(_now_playing) = LiveNowPlaying::acquire("in_memory_artwork_applies_to_now_playing")
+    else {
+        return;
+    };
     let center = NowPlayingInfoCenter::default_center();
     center
         .set_now_playing_info_with_artwork(&NowPlayingInfo::new().title("Artwork"), Some(&artwork))

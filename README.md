@@ -142,6 +142,8 @@ cargo test
 for ex in examples/*.rs; do cargo run --example "$(basename "$ex" .rs)"; done
 ```
 
+`cargo test` skips the tests that write the system Now Playing info or register remote-command handlers unless `MEDIAPLAYER_LIVE_TESTS=1` is set; those tests restore the previous Now Playing info and disable the commands they used.
+
 ## License
 
 Licensed under either of [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT) at your option.
